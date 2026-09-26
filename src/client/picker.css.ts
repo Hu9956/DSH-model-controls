@@ -191,7 +191,7 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   height: 100% !important;
 }
 /* M-056：触发按钮 14px 小档——占位=实际渲染尺寸（SVG 随盒缩放），满幅 logo≈13px 文字高；
-   首字母回退同盒（9px/600），flex:none 防长模型名挤压图标 */
+   flex:none 防长模型名挤压图标 */
 .dsh003-provider-logo--sm {
   width: 14px !important;
   height: 14px !important;
@@ -199,9 +199,6 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  font-size: 9px !important;
-  font-weight: 600 !important;
-  line-height: 1 !important;
 }
 .dsh003-provider-initial {
   display: inline-flex !important;
@@ -210,6 +207,23 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   font-size: 16px !important;
   font-weight: 700 !important;
   line-height: 1 !important;
+}
+/* 触发按钮首字兜底微型徽标：16px 微圆角卡片，对齐左栏 36px 方框语言，中英文字号 11px 清晰不缩水 */
+.dsh003-provider-initial--sm {
+  width: 16px !important;
+  height: 16px !important;
+  flex: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: var(--dshT3-radius-sm, 4px) !important;
+  background: var(--dsw-alias-interactive-bg-hover) !important;
+  border: 1px solid var(--dsw-alias-border-l1) !important;
+  color: var(--dsw-alias-label-primary) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  line-height: 1 !important;
+  box-sizing: border-box !important;
 }
 .dsh003-picker-model-col {
   flex: 1 !important;

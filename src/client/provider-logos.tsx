@@ -188,7 +188,7 @@ export function ProviderLogo(props: { providerId: string; name: string; small?: 
   if (svg === null) {
     if (props.small === true) {
       return (
-        <span className={cls} aria-hidden="true">
+        <span className="dsh003-provider-initial dsh003-provider-initial--sm" aria-hidden="true">
           {providerInitial(props.name)}
         </span>
       )
