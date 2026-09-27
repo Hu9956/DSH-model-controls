@@ -19,6 +19,8 @@ export interface ModelPickerButtonProps {
 }
 
 export function ModelPickerButton({ locked = false, directory }: ModelPickerButtonProps): React.ReactNode {
+  const interactionLocked = React.useRef(locked)
+  interactionLocked.current = locked
   const adapter = React.useMemo(() => createCatalogAdapter(directory), [directory])
   const catalog = React.useSyncExternalStore(adapter.subscribe, adapter.getSnapshot)
   const [selectionError, setSelectionError] = React.useState<string | null>(null)
@@ -29,6 +31,7 @@ export function ModelPickerButton({ locked = false, directory }: ModelPickerButt
     return () => { selectionRequest.current += 1 }
   }, [adapter])
   const submit = (provider: string, model: string, effort?: string): void => {
+    if (interactionLocked.current) return
     const request = ++selectionRequest.current
     setSelectionError(null)
     void adapter.select(provider, model, effort).then(ok => {
@@ -37,6 +40,7 @@ export function ModelPickerButton({ locked = false, directory }: ModelPickerButt
     })
   }
   const [open, setOpen] = React.useState(false)
+  React.useLayoutEffect(() => { if (locked) setOpen(false) }, [locked])
   // 官方模型入口在右侧：弹层右缘对齐按钮右缘，向左展开。
   const [pos, setPos] = React.useState<React.CSSProperties | null>(null)
   const buttonRef = React.useRef<HTMLButtonElement | null>(null)
@@ -50,6 +54,7 @@ export function ModelPickerButton({ locked = false, directory }: ModelPickerButt
   React.useEffect(() => { adapter.load() }, [adapter])
 
   const toggle = (): void => {
+    if (interactionLocked.current) return
     if (open) {
       closeMenu()
       return
@@ -160,7 +165,7 @@ export function ModelPickerButton({ locked = false, directory }: ModelPickerButt
         )}
         <IconChevronDownOutlineRegular className="dsh003-picker-chev" />
       </button>
-      {open && pos !== null && createPortal(
+      {open && !locked && pos !== null && createPortal(
         <ModelPickerPanel
           pending={catalog.pending}
           error={selectionError ?? catalog.error}

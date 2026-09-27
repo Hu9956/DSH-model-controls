@@ -218,6 +218,130 @@ test('Escape cancels a keyboard preview before restoring trigger focus', async (
   assert.equal(win.document.activeElement, query('.dsh003-picker-btn'))
 })
 
+test('locking closes the panel, cancels its pointer preview and does not reopen on unlock', async () => {
+  const f = fixture(); await render(f.directory); await open()
+  const staleRow = rows()[1]
+  await pointer(query('[role="slider"]'), 'pointerdown')
+  await action(() => root.render(React.createElement(plugin.ModelPickerButton, { directory: f.directory, locked: true })))
+  assert.equal(query('.dsh003-picker-btn').disabled, true)
+  assert.equal(query('[role="dialog"]'), null)
+  await action(() => staleRow.click()); await pointer(win, 'pointerup')
+  assert.equal(f.calls.length, 0)
+  await render(f.directory)
+  assert.equal(query('[role="dialog"]'), null)
+  await open(); await action(() => rows()[1].click())
+  assert.equal(f.calls[0].model, 'b')
+})
+
+test('locking cannot commit an unsubmitted keyboard effort preview', async () => {
+  const f = fixture(); await render(f.directory); await open()
+  const slider = query('[role="slider"]')
+  await action(() => slider.focus()); await key(slider, 'ArrowRight')
+  await action(() => root.render(React.createElement(plugin.ModelPickerButton, { directory: f.directory, locked: true })))
+  await key(slider, 'ArrowRight', 'keyup')
+  assert.equal(f.calls.length, 0)
+  assert.equal(query('[role="dialog"]'), null)
+})
+
+test('catalog refresh preserves browsing; disappearance falls back and actual selection follows', async () => {
+  const f = fixture()
+  const groups = [
+    { id: 'p', name: 'P', models: [{ id: 'a', name: 'Model a' }] },
+    { id: 'q', name: 'Q', models: [{ id: 'z', name: 'Model z' }] },
+  ]
+  f.publish({ groups }); await render(f.directory); await open()
+  await action(() => query('[data-provider-id="q"]').click())
+  await action(() => f.publish({ groups: groups.map(group => ({ ...group })) }))
+  assert.equal(rows()[0].textContent, 'Model z')
+  assert.equal(query('[data-provider-id="q"]').dataset.active, 'true')
+  await action(() => f.publish({ groups: [groups[0]] }))
+  assert.equal(rows()[0].textContent, 'Model a')
+  await action(() => f.publish({ groups }))
+  assert.equal(rows()[0].textContent, 'Model a')
+  await action(() => f.publish({ current: { provider: 'q', model: 'z' } }))
+  assert.equal(rows()[0].textContent, 'Model z')
+  assert.equal(f.calls.length, 0)
+})
+
+test('an asynchronously loaded catalog initially opens the current provider', async () => {
+  const f = fixture(); f.publish({ groups: [], status: 'loading', current: { provider: 'q', model: 'z' } })
+  await render(f.directory); await open()
+  await action(() => f.publish({ status: 'ready', groups: [
+    { id: 'p', name: 'P', models: [{ id: 'a', name: 'Model a' }] },
+    { id: 'q', name: 'Q', models: [{ id: 'z', name: 'Model z' }] },
+  ] }))
+  assert.equal(rows()[0].textContent, 'Model z')
+  assert.equal(query('[data-provider-id="q"]').dataset.active, 'true')
+})
+
+test('window blur cancels an effort drag even when focus stays in search; a new gesture still works', async () => {
+  const f = fixture(); await render(f.directory); await open()
+  const slider = query('[role="slider"]')
+  assert.equal(win.document.activeElement, query('.dsh003-picker-search'))
+  await pointer(slider, 'pointerdown'); await pointer(win, 'pointermove', 1, 285)
+  await action(() => win.dispatchEvent(new win.Event('blur')))
+  assert.equal(slider.getAttribute('aria-valuetext'), 'Low')
+  await pointer(win, 'pointerup'); assert.equal(f.calls.length, 0)
+  await pointer(slider, 'pointerdown'); await pointer(win, 'pointerup')
+  assert.equal(f.calls.length, 1)
+  assert.equal(f.calls[0].reasoningEffort, 'high')
+})
+
+test('empty supplier, catalog, favorites, loading and failure each show one matching message', async () => {
+  const f = fixture(); f.publish({ groups: [{ id: 'p', name: 'P', models: [] }] })
+  await render(f.directory); await open()
+  const message = () => {
+    const all = [...win.document.querySelectorAll('.dsh003-picker-model-list p')]
+    assert.equal(all.length, 1)
+    return all[0].textContent
+  }
+  assert.equal(message(), '该提供方暂未公布模型。')
+  await action(() => f.publish({ groups: [], current: null }))
+  assert.equal(message(), '暂无可用模型，请检查提供方配置。')
+  await action(() => query('.dsh003-picker-prov-fav').click())
+  assert.match(message(), /^暂无收藏/)
+  await action(() => f.publish({ status: 'loading' }))
+  assert.equal(message(), '正在加载模型目录…')
+  await action(() => f.publish({ status: 'error' }))
+  assert.equal(message(), '模型目录加载失败，请稍后重试。')
+})
+
+test('a search with no results shows only the search empty message', async () => {
+  const f = fixture(); await render(f.directory); await open()
+  const search = query('.dsh003-picker-search')
+  await action(() => {
+    Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set.call(search, 'does-not-exist')
+    search.dispatchEvent(new win.Event('input', { bubbles: true }))
+  })
+  assert.equal(rows().length, 0)
+  const messages = [...win.document.querySelectorAll('.dsh003-picker-model-list p')]
+  assert.equal(messages.length, 1)
+  assert.equal(messages[0].textContent, '没有匹配的模型。')
+})
+
+test('cached lists still reflect favorite changes and catalog updates under an active search', async () => {
+  const f = fixture()
+  const group = { id: 'cache-provider', name: 'Cache Provider', models: [{ id: 'unique', name: 'Original name' }] }
+  f.publish({ current: { provider: group.id, model: 'unique' }, groups: [group] })
+  await render(f.directory); await open()
+  await action(() => rows()[0].querySelector('.dsh003-picker-row-star').click())
+  await action(() => query('.dsh003-picker-prov-fav').click())
+  assert.equal(rows().length, 1)
+  assert.match(rows()[0].textContent, /Original name/)
+  await action(() => rows()[0].querySelector('.dsh003-picker-row-star').click())
+  assert.equal(rows().length, 0)
+  await action(() => query('[data-provider-id="cache-provider"]').click())
+  const search = query('.dsh003-picker-search')
+  await action(() => {
+    Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set.call(search, 'renamed')
+    search.dispatchEvent(new win.Event('input', { bubbles: true }))
+  })
+  assert.equal(rows().length, 0)
+  await action(() => f.publish({ groups: [{ ...group, models: [{ id: 'unique', name: 'Renamed model' }] }] }))
+  assert.equal(rows().length, 1)
+  assert.equal(rows()[0].textContent, 'Renamed model')
+})
+
 let supplierFixtureId = 0
 const suppliers = () => [...win.document.querySelectorAll('.dsh003-picker-prov-list [data-provider-id]')]
 const supplierIds = () => suppliers().map(button => button.dataset.providerId)

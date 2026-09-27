@@ -22,6 +22,11 @@ const NO_MATCH_TEXT = '没有匹配的模型。'
 const LOADING_TEXT = '正在加载模型目录…'
 const LOAD_FAILED_TEXT = '模型目录加载失败，请稍后重试。'
 const EMPTY_GROUP_TEXT = '该提供方暂未公布模型。'
+const EMPTY_CATALOG_TEXT = '暂无可用模型，请检查提供方配置。'
+
+function providerNameOf(provider: { id: string; name: string }): string {
+  return prettifyProviderName(provider.id, provider.name)
+}
 
 function StarIcon(props: { filled: boolean }): React.ReactNode {
   // lucide star（24 viewBox）：统一保留 2px 描边边界，避免实心填充消除描边外扩导致视觉缩小（10%跳变）
@@ -124,12 +129,18 @@ export function ModelPickerPanel(props: {
   const [query, setQuery] = React.useState('')
   const [activeProviderId, setActiveProviderId] = React.useState<string>(initialProviderId)
 
-  // 目录异步就绪或外部变更时，若当前提供方在目录中则自动跟随当前激活模型
+  const observedProvider = React.useRef(current?.provider)
+  // 跟随实际模型切换；目录刷新保留正在浏览的供应商，失效后才回退。
   React.useEffect(() => {
-    if (current?.provider && providers.some(p => p.id === current.provider)) {
-      setActiveProviderId(current.provider)
-    }
-  }, [current?.provider, providers])
+    const changed = observedProvider.current !== current?.provider
+    observedProvider.current = current?.provider
+    const currentId = providers.some(p => p.id === current?.provider) ? current?.provider : undefined
+    setActiveProviderId(active => {
+      if (changed && currentId) return currentId
+      if (providers.some(p => p.id === active)) return active
+      return currentId ?? providerSort.sorted[0]?.id ?? ''
+    })
+  }, [current?.provider, providers, providerSort.sorted])
 
   // 视口自动滚动至当前激活模型
   const activeRowRef = React.useRef<HTMLButtonElement | null>(null)
@@ -140,7 +151,6 @@ export function ModelPickerPanel(props: {
   }, [activeProviderId, favView])
 
   const normalized = query.trim().toLocaleLowerCase()
-  const matchText = (text: string): boolean => normalized === '' || text.toLocaleLowerCase().includes(normalized)
 
   // 底部推理等级：提取当前模型及其档位
   const currentProvider = providers.find(p => p.id === current?.provider)
@@ -278,6 +288,7 @@ export function ModelPickerPanel(props: {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onEnd)
       window.removeEventListener('pointercancel', onCancel)
+      window.removeEventListener('blur', cancel)
       hitEl.removeEventListener('lostpointercapture', onCancel)
       try { hitEl.releasePointerCapture(pointerId) } catch { /* Capture may already be released. */ }
       dragRectRef.current = null
@@ -310,28 +321,40 @@ export function ModelPickerPanel(props: {
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onEnd)
     window.addEventListener('pointercancel', onCancel)
+    window.addEventListener('blur', cancel)
     hitEl.addEventListener('lostpointercapture', onCancel)
   }
 
-  // M-065：目录组名是路由 id 兜底（displayName≡id）时美化显示；真名透传
-  const providerNameOf = (provider: { id: string; name: string }): string => prettifyProviderName(provider.id, provider.name)
-
   // 收藏视图的汇总行：收藏键 → 提供方 + 模型（键失效自动跳过）
-  const favoriteRows: PickerRow[] = []
-  for (const provider of providers) {
-    for (const model of provider.models) {
-      if (favorites.has(favoriteKeyOf(provider.id, model.id))) {
-        favoriteRows.push({ providerId: provider.id, providerName: providerNameOf(provider), modelId: model.id, modelName: model.name })
+  const favoriteRows = React.useMemo(() => {
+    const rows: PickerRow[] = []
+    if (!favView) return rows
+    for (const provider of providers) {
+      for (const model of provider.models) {
+        if (favorites.has(favoriteKeyOf(provider.id, model.id))) {
+          rows.push({ providerId: provider.id, providerName: providerNameOf(provider), modelId: model.id, modelName: model.name })
+        }
       }
     }
-  }
+    return rows
+  }, [favView, providers, favorites])
 
   const activeProvider = providers.find(p => p.id === activeProviderId) ?? providerSort.sorted[0]
-  const sourceRows: PickerRow[] = favView
-    ? favoriteRows
-    : (activeProvider?.models ?? []).map(model => ({ providerId: activeProvider.id, providerName: providerNameOf(activeProvider), modelId: model.id, modelName: model.name }))
-  const visibleRows = sourceRows.filter(row =>
-    matchText(row.modelName) || matchText(row.modelId) || (favView && matchText(row.providerName)))
+  const sourceRows = React.useMemo(() => {
+    if (favView) return favoriteRows
+    if (!activeProvider) return []
+    return activeProvider.models.map(model => ({ providerId: activeProvider.id, providerName: providerNameOf(activeProvider), modelId: model.id, modelName: model.name }))
+  }, [favView, favoriteRows, activeProvider])
+  const visibleRows = React.useMemo(() => {
+    const matches = (text: string): boolean => text.toLocaleLowerCase().includes(normalized)
+    return normalized === '' ? sourceRows : sourceRows.filter(row =>
+      matches(row.modelName) || matches(row.modelId) || (favView && matches(row.providerName)))
+  }, [sourceRows, normalized, favView])
+  const emptyText = catalogStatus === 'loading' ? LOADING_TEXT
+    : catalogStatus === 'error' ? LOAD_FAILED_TEXT
+    : normalized !== '' ? NO_MATCH_TEXT
+    : favView ? FAVORITES_EMPTY_TEXT
+    : activeProvider ? EMPTY_GROUP_TEXT : EMPTY_CATALOG_TEXT
 
   const pick = (providerId: string, modelId: string): void => {
     const isCurrent = current?.provider === providerId && current?.model === modelId
@@ -412,14 +435,7 @@ export function ModelPickerPanel(props: {
             </div>
           </div>
           <div className="dsh003-picker-model-list">
-            {catalogStatus === 'loading' && visibleRows.length === 0 && <p className="dsh003-picker-empty">{LOADING_TEXT}</p>}
-            {catalogStatus === 'error' && visibleRows.length === 0 && <p className="dsh003-picker-empty">{LOAD_FAILED_TEXT}</p>}
-            {catalogStatus !== 'loading' && catalogStatus !== 'error' && visibleRows.length === 0 && (
-              <p className="dsh003-picker-empty">{normalized !== '' ? NO_MATCH_TEXT : FAVORITES_EMPTY_TEXT}</p>
-            )}
-            {catalogStatus !== 'loading' && catalogStatus !== 'error' && visibleRows.length === 0 && !favView && activeProvider !== undefined && activeProvider.models.length === 0 && (
-              <p className="dsh003-picker-empty">{EMPTY_GROUP_TEXT}</p>
-            )}
+            {visibleRows.length === 0 && <p className="dsh003-picker-empty">{emptyText}</p>}
             {visibleRows.map(row => {
               const key = favoriteKeyOf(row.providerId, row.modelId)
               const active = row.providerId === current?.provider && row.modelId === current?.model

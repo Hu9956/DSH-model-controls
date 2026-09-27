@@ -6,8 +6,8 @@ interface DragPreview { id: string; before: string | null; offset: number }
 /** Long press owns its pointer; no catalog/model writes are involved. */
 export function useProviderSort<T extends { id: string }>(providers: readonly T[]) {
   const order = React.useSyncExternalStore(subscribeProviderOrder, getProviderOrder)
-  const sorted = orderedProviders(providers, order)
-  const idsKey = JSON.stringify(providers.map(provider => provider.id))
+  const sorted = React.useMemo(() => orderedProviders(providers, order), [providers, order])
+  const idsKey = React.useMemo(() => JSON.stringify(providers.map(provider => provider.id)), [providers])
   const listRef = React.useRef<HTMLDivElement | null>(null)
   const cancelRef = React.useRef<(() => void) | null>(null)
   const blockedClick = React.useRef<string | null>(null)
@@ -42,7 +42,9 @@ export function useProviderSort<T extends { id: string }>(providers: readonly T[
       const baseTop = origin.top - (list.scrollTop - originScroll)
       const desiredTop = origin.top + y - originY
       const top = Math.max(bounds.top, Math.min(bounds.bottom - origin.height, desiredTop))
-      setDrag({ id, before, offset: top - baseTop })
+      const offset = top - baseTop
+      setDrag(previous => previous?.id === id && previous.before === before && previous.offset === offset
+        ? previous : { id, before, offset })
     }
     const cleanup = (): void => {
       if (done) return
@@ -102,7 +104,11 @@ export function useProviderSort<T extends { id: string }>(providers: readonly T[
       scrollTimer = window.setInterval(() => {
         const bounds = list.getBoundingClientRect()
         const direction = y < bounds.top + 18 ? -1 : y > bounds.bottom - 18 ? 1 : 0
-        if (direction !== 0) { list.scrollTop += direction * 10; update() }
+        if (direction !== 0) {
+          const previousScroll = list.scrollTop
+          list.scrollTop += direction * 10
+          if (list.scrollTop !== previousScroll) update()
+        }
       }, 50)
     }, 300)
     cancelRef.current = cancel
