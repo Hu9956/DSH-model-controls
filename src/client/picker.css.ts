@@ -164,6 +164,38 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   box-sizing: border-box !important;
   transition: background 120ms ease, color 120ms ease, border-color 120ms ease !important;
 }
+.dsh003-picker-prov-list > .dsh003-picker-prov {
+  position: relative !important;
+  touch-action: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+.dsh003-picker-prov-list[data-sorting="true"] > .dsh003-picker-prov {
+  cursor: grabbing !important;
+}
+.dsh003-picker-prov[data-dragging="true"] {
+  z-index: 1 !important;
+  background: var(--dsw-alias-interactive-bg-hover) !important;
+  color: var(--dsw-alias-label-primary) !important;
+  transition: none !important;
+}
+.dsh003-picker-prov[data-insert="before"]::before,
+.dsh003-picker-prov-insert-end {
+  content: '' !important;
+  height: 1px !important;
+  width: 28px !important;
+  background: var(--dsw-alias-label-secondary) !important;
+  pointer-events: none !important;
+}
+.dsh003-picker-prov[data-insert="before"]::before {
+  position: absolute !important;
+  top: -3px !important;
+  left: 3px !important;
+}
+.dsh003-picker-prov-insert-end {
+  flex: none !important;
+  margin-top: -2px !important;
+}
 .dsh003-picker-prov:hover,
 .dsh003-picker-prov:focus-visible {
   background: var(--dsw-alias-interactive-bg-hover) !important;

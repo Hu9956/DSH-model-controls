@@ -63,8 +63,8 @@ const open = async () => { await action(() => query('.dsh003-picker-btn').click(
 const key = async (element, value, type = 'keydown') => {
   await action(() => element.dispatchEvent(new win.KeyboardEvent(type, { key: value, bubbles: true, cancelable: true })))
 }
-const pointer = async (target, type, pointerId = 1, clientX = 280) => {
-  const event = new win.MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX, clientY: 410 })
+const pointer = async (target, type, pointerId = 1, clientX = 280, clientY = 410) => {
+  const event = new win.MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX, clientY })
   Object.defineProperties(event, { pointerId: { value: pointerId }, isPrimary: { value: true } })
   await action(() => target.dispatchEvent(event))
 }
@@ -216,4 +216,148 @@ test('Escape cancels a keyboard preview before restoring trigger focus', async (
   await action(() => slider.focus()); await key(slider, 'ArrowRight'); await key(slider, 'Escape')
   assert.equal(f.calls.length, 0)
   assert.equal(win.document.activeElement, query('.dsh003-picker-btn'))
+})
+
+let supplierFixtureId = 0
+const suppliers = () => [...win.document.querySelectorAll('.dsh003-picker-prov-list [data-provider-id]')]
+const supplierIds = () => suppliers().map(button => button.dataset.providerId)
+const savedOrder = () => JSON.parse(win.localStorage.getItem('dsh003.model-picker.provider-order'))
+function supplierFixture(t) {
+  const f = fixture(), prefix = `supplier-${++supplierFixtureId}`
+  const groups = ['A', 'B', 'C'].map(name => ({ id: `${prefix}-${name}`, name, models: [{ id: name, name: `Model ${name}` }] }))
+  f.publish({ groups, current: { provider: groups[0].id, model: 'A' } })
+  const originalRect = win.HTMLElement.prototype.getBoundingClientRect
+  t.mock.method(win.HTMLElement.prototype, 'getBoundingClientRect', function () {
+    if (this.classList.contains('dsh003-picker-prov-list')) return { top: 0, bottom: 120, height: 120, left: 0, right: 52, width: 52 }
+    if (this.dataset.providerId) {
+      const offset = Number(this.style.transform.match(/translateY\(([-.\d]+)px\)/)?.[1] ?? 0)
+      const top = suppliers().indexOf(this) * 40 + offset - query('.dsh003-picker-prov-list').scrollTop
+      return { top, bottom: top + 36, height: 36, left: 8, right: 44, width: 36 }
+    }
+    return originalRect.call(this)
+  })
+  let hold, scroll
+  const originalTimeout = win.setTimeout.bind(win)
+  t.mock.method(win, 'setTimeout', (fn, ms, ...args) => {
+    if (ms === 300) { hold = fn; return 900000 }
+    return originalTimeout(fn, ms, ...args)
+  })
+  t.mock.method(win, 'setInterval', fn => { scroll = fn; return 900001 })
+  return { ...f, groups, hold: () => action(() => hold()), scroll: () => action(() => scroll()) }
+}
+
+test('supplier positions survive host reordering, temporary absence and new providers', async t => {
+  const f = supplierFixture(t); await render(f.directory); await open()
+  const ids = f.groups.map(p => p.id)
+  assert.deepEqual(supplierIds(), ids)
+  await action(() => f.publish({ groups: [f.groups[2], f.groups[0]] }))
+  assert.deepEqual(supplierIds(), [ids[0], ids[2]])
+  const extra = { id: 'extra-stable', name: 'Extra', models: [] }
+  await action(() => f.publish({ groups: [extra, ...f.groups.toReversed()] }))
+  assert.deepEqual(supplierIds(), [...ids, extra.id])
+})
+test('long press reorders without switching and persists across reopening and a fresh plugin load', async t => {
+  const f = supplierFixture(t); await render(f.directory); await open()
+  const ids = f.groups.map(p => p.id), first = suppliers()[0]
+  await pointer(first, 'pointerdown', 1, 20, 18); await f.hold()
+  assert.equal(first.dataset.dragging, 'true')
+  await pointer(win, 'pointermove', 1, 20, 115)
+  assert.ok(query('.dsh003-picker-prov-insert-end'))
+  await pointer(win, 'pointerup', 1, 20, 115)
+  await action(() => first.click())
+  const expected = [ids[1], ids[2], ids[0]]
+  assert.deepEqual(supplierIds(), expected)
+  assert.equal(f.calls.length, 0)
+  assert.match(query('.dsh003-picker-model-row').textContent, /Model A/)
+  assert.deepEqual(savedOrder().filter(id => ids.includes(id)), expected)
+  await key(query('.dsh003-picker-search'), 'Escape'); await open()
+  assert.deepEqual(supplierIds(), expected)
+  runInNewContext(readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8'), { document: win.document, Element: win.Element, Node: win.Node, console, window: win })
+  const reloaded = descriptor.factory(name => name === '@deepseek-ai/dsh-client-ui-primitives'
+    ? { MenuSurface: React.forwardRef((props, ref) => React.createElement('div', { ...props, ref })), IconChevronDownOutlineRegular: () => null }
+    : require(name))
+  await action(() => root.render(React.createElement(reloaded.ModelPickerButton, { directory: f.directory })))
+  await open()
+  assert.deepEqual(supplierIds(), expected)
+})
+test('a short click switches the supplier; movement before the hold cancels sorting and click', async t => {
+  const f = supplierFixture(t); await render(f.directory); await open()
+  const second = suppliers()[1], before = savedOrder()
+  await pointer(second, 'pointerdown', 1, 20, 58)
+  await pointer(win, 'pointerup', 1, 20, 58); await action(() => second.click())
+  assert.match(rows()[0].textContent, /Model B/)
+  const first = suppliers()[0]
+  await pointer(first, 'pointerdown', 1, 20, 18)
+  await pointer(win, 'pointermove', 1, 20, 30)
+  await pointer(win, 'pointerup', 1, 20, 30); await action(() => first.click())
+  assert.match(rows()[0].textContent, /Model B/)
+  assert.deepEqual(savedOrder(), before)
+})
+test('Escape cancels supplier sorting and keeps the menu open', async t => {
+  const f = supplierFixture(t); await render(f.directory); await open()
+  const first = suppliers()[0], before = savedOrder()
+  await pointer(first, 'pointerdown', 1, 20, 18); await f.hold()
+  await pointer(win, 'pointermove', 1, 20, 115)
+  await key(first, 'Escape')
+  assert.ok(query('[role="dialog"]'))
+  assert.equal(query('[data-dragging="true"]'), null)
+  await pointer(win, 'pointerup', 1, 20, 115); await action(() => first.click())
+  assert.deepEqual(savedOrder(), before)
+  assert.match(rows()[0].textContent, /Model A/)
+})
+test('supplier pointer ownership, cancellation and lost capture cannot save a preview', async t => {
+  const f = supplierFixture(t); await render(f.directory); await open()
+  const first = suppliers()[0], before = savedOrder()
+  await pointer(first, 'pointerdown', 1, 20, 18); await f.hold()
+  await pointer(win, 'pointermove', 2, 20, 115)
+  await pointer(win, 'pointerup', 2, 20, 115)
+  assert.equal(first.dataset.dragging, 'true')
+  await pointer(win, 'pointermove', 1, 20, 115)
+  await pointer(win, 'pointercancel', 1, 20, 115)
+  assert.deepEqual(savedOrder(), before)
+  await pointer(first, 'pointerdown', 1, 20, 18); await f.hold()
+  await pointer(win, 'pointermove', 1, 20, 115)
+  await pointer(first, 'lostpointercapture', 1, 20, 115)
+  await pointer(win, 'pointerup', 1, 20, 115)
+  assert.deepEqual(savedOrder(), before)
+  assert.equal(f.calls.length, 0)
+})
+test('supplier changes and closing remove active sort listeners without saving', async t => {
+  const f = supplierFixture(t); await render(f.directory); await open()
+  const first = suppliers()[0], before = savedOrder()
+  await pointer(first, 'pointerdown', 1, 20, 18); await f.hold()
+  await pointer(win, 'pointermove', 1, 20, 115)
+  await action(() => f.publish({ groups: [f.groups[0], f.groups[1]] }))
+  await pointer(win, 'pointerup', 1, 20, 115)
+  assert.deepEqual(savedOrder(), before)
+  await pointer(first, 'pointerdown', 1, 20, 18); await f.hold()
+  await action(() => query('.dsh003-picker-btn').click())
+  await pointer(win, 'pointerup', 1, 20, 115)
+  assert.deepEqual(savedOrder(), before)
+  assert.equal(query('[role="dialog"]'), null)
+})
+test('keyboard supplier reordering retains focus and leaves the selected model unchanged', async t => {
+  const f = supplierFixture(t); await render(f.directory); await open()
+  const first = suppliers()[0], ids = f.groups.map(p => p.id)
+  await action(() => first.focus())
+  await action(() => first.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true, cancelable: true })))
+  assert.deepEqual(supplierIds(), [ids[1], ids[0], ids[2]])
+  assert.equal(win.document.activeElement, first)
+  assert.equal(f.calls.length, 0)
+  assert.match(rows()[0].textContent, /Model A/)
+})
+
+test('holding a supplier at the viewport edge scrolls to destinations outside the initial view', async t => {
+  const f = supplierFixture(t)
+  const extra = ['D', 'E', 'F'].map(name => ({ id: `scroll-${name}`, name, models: [{ id: name, name }] }))
+  const groups = [...f.groups, ...extra], ids = groups.map(p => p.id)
+  f.publish({ groups }); await render(f.directory); await open()
+  await pointer(suppliers()[0], 'pointerdown', 1, 20, 18); await f.hold()
+  await pointer(win, 'pointermove', 1, 20, 115)
+  for (let index = 0; index < 5; index++) await f.scroll()
+  assert.equal(query('.dsh003-picker-prov-list').scrollTop, 50)
+  assert.equal(query('[data-insert="before"]').dataset.providerId, ids[4])
+  await pointer(win, 'pointerup', 1, 20, 115)
+  assert.deepEqual(supplierIds(), [ids[1], ids[2], ids[3], ids[0], ids[4], ids[5]])
+  assert.equal(f.calls.length, 0)
 })

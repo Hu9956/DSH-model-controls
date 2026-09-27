@@ -13,6 +13,7 @@ import { favoriteKeyOf, getFavoriteSet, subscribeFavorites, toggleFavorite } fro
 import { prettifyProviderName } from './provider-names'
 import { ProviderLogo } from './provider-logos'
 import type { CatalogGroupSnapshot } from './model-catalog'
+import { useProviderSort } from './use-provider-sort'
 
 const STAR_FAVORITES_LABEL = '收藏夹'
 const SEARCH_PLACEHOLDER = '搜索模型…'
@@ -79,6 +80,7 @@ export function ModelPickerPanel(props: {
   onClose(): void
 }): React.ReactNode {
   const { providers, current, catalogStatus } = props
+  const providerSort = useProviderSort(providers)
   const favorites = React.useSyncExternalStore(subscribeFavorites, getFavoriteSet)
   const panelRef = React.useRef<HTMLDivElement | null>(null)
   const searchRef = React.useRef<HTMLInputElement | null>(null)
@@ -115,8 +117,8 @@ export function ModelPickerPanel(props: {
     if (rememberedProviderId !== '' && providers.some(p => p.id === rememberedProviderId)) {
       return rememberedProviderId
     }
-    return providers[0]?.id ?? ''
-  }, [current?.provider, providers])
+    return providerSort.sorted[0]?.id ?? ''
+  }, [current?.provider, providers, providerSort.sorted])
 
   const [favView, setFavView] = React.useState(false)
   const [query, setQuery] = React.useState('')
@@ -324,7 +326,7 @@ export function ModelPickerPanel(props: {
     }
   }
 
-  const activeProvider = providers.find(p => p.id === activeProviderId) ?? providers[0]
+  const activeProvider = providers.find(p => p.id === activeProviderId) ?? providerSort.sorted[0]
   const sourceRows: PickerRow[] = favView
     ? favoriteRows
     : (activeProvider?.models ?? []).map(model => ({ providerId: activeProvider.id, providerName: providerNameOf(activeProvider), modelId: model.id, modelName: model.name }))
@@ -364,15 +366,23 @@ export function ModelPickerPanel(props: {
             </button>
           </div>
           <div className="dsh003-picker-prov-divider" />
-          <div className="dsh003-picker-prov-list">
-            {providers.map(provider => (
+          <div ref={providerSort.listRef} className="dsh003-picker-prov-list" data-sorting={providerSort.drag ? 'true' : undefined}>
+            {providerSort.sorted.map(provider => (
               <button
                 key={provider.id}
                 type="button"
                 className="dsh003-picker-prov"
+                data-provider-id={provider.id}
+                data-dragging={providerSort.drag?.id === provider.id ? 'true' : undefined}
+                data-insert={providerSort.drag?.before === provider.id ? 'before' : undefined}
+                style={providerSort.drag?.id === provider.id ? { transform: `translateY(${providerSort.drag.offset}px)` } : undefined}
                 data-active={!favView && provider.id === activeProvider?.id ? 'true' : 'false'}
                 aria-label={providerNameOf(provider)}
-                title={providerNameOf(provider)}
+                title={`${providerNameOf(provider)} · 长按拖动排序（Alt + ↑/↓）`}
+                onPointerDown={event => providerSort.begin(event, provider.id)}
+                onClickCapture={providerSort.suppressClick}
+                onKeyDown={event => providerSort.keyboardMove(event, provider.id)}
+                onContextMenu={event => event.preventDefault()}
                 onClick={() => {
                   rememberedFavView = false
                   rememberedProviderId = provider.id
@@ -383,6 +393,7 @@ export function ModelPickerPanel(props: {
                 <ProviderLogo providerId={provider.id} name={provider.name} />
               </button>
             ))}
+            {providerSort.drag?.before === null && <span className="dsh003-picker-prov-insert-end" aria-hidden="true" />}
           </div>
         </div>
         <div className="dsh003-picker-model-col">
