@@ -69,9 +69,10 @@ export function ModelPickerPanel(props: {
   providers: ReadonlyArray<CatalogGroupSnapshot>
   /** 当前选择（provider id + model id + reasoningEffort） */
   current: { provider: string; model: string; reasoningEffort?: string } | null
-  /** 弹层定位（fixed 的 left/bottom 由触发按钮计算传入） */
+  /** 弹层定位及可用高度，由触发按钮计算传入。 */
   containerStyle?: React.CSSProperties
   onPick(providerId: string, modelId: string): void
+  partial?: boolean
   pending?: boolean
   error?: string | null
   onSelectEffort?(effortId: string): void
@@ -79,6 +80,32 @@ export function ModelPickerPanel(props: {
 }): React.ReactNode {
   const { providers, current, catalogStatus } = props
   const favorites = React.useSyncExternalStore(subscribeFavorites, getFavoriteSet)
+  const panelRef = React.useRef<HTMLDivElement | null>(null)
+  const searchRef = React.useRef<HTMLInputElement | null>(null)
+  React.useLayoutEffect(() => { searchRef.current?.focus({ preventScroll: true }) }, [])
+
+  const onPanelKeyDown = (event: React.KeyboardEvent): void => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      event.stopPropagation()
+      cancelDragRef.current?.()
+      keyboardPreviewRef.current = false
+      snapIndexRef.current = null
+      props.onClose()
+      return
+    }
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+    const rows = Array.from(panelRef.current?.querySelectorAll<HTMLButtonElement>('.dsh003-picker-model-row') ?? [])
+    const index = rows.indexOf(event.target as HTMLButtonElement)
+    if (event.target !== searchRef.current && index < 0) return
+    if (rows.length === 0) return
+    event.preventDefault()
+    const next = index < 0
+      ? event.key === 'ArrowDown' ? 0 : rows.length - 1
+      : (index + (event.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length
+    rows[next]?.focus({ preventScroll: true })
+    rows[next]?.scrollIntoView({ block: 'nearest' })
+  }
 
   // 打开面板优先定位到当前模型所在的提供方；否则回退到记忆值或第一个
   const initialProviderId = React.useMemo(() => {
@@ -141,6 +168,8 @@ export function ModelPickerPanel(props: {
   const dragRatioRef = React.useRef<number | null>(null)
   const startXRef = React.useRef(0)
   const startYRef = React.useRef(0)
+  const cancelDragRef = React.useRef<(() => void) | null>(null)
+  const keyboardPreviewRef = React.useRef(false)
 
   const lockSnap = (idx: number): void => {
     snapIndexRef.current = idx
@@ -163,10 +192,13 @@ export function ModelPickerPanel(props: {
   }, [props.pending, props.error])
 
   React.useLayoutEffect(() => {
+    cancelDragRef.current?.()
+    keyboardPreviewRef.current = false
     snapIndexRef.current = null
     setSnapIndex(null)
     dragRatioRef.current = null
     setDragRatio(null)
+    return () => { cancelDragRef.current?.() }
   }, [current?.provider, current?.model])
 
   const maxIndex = Math.max(effortCount - 1, 0)
@@ -181,6 +213,8 @@ export function ModelPickerPanel(props: {
   }, [efforts, liveIndex])
 
   const commitEffort = (): void => {
+    if (!keyboardPreviewRef.current) return
+    keyboardPreviewRef.current = false
     if (!efforts) return
     const idx = Math.min(Math.max(snapIndexRef.current ?? activeIndex, 0), efforts.length - 1)
     const next = efforts[idx]
@@ -200,11 +234,16 @@ export function ModelPickerPanel(props: {
     else if (e.key === 'End') next = maxIdx
     if (next === null) return
     e.preventDefault()
+    keyboardPreviewRef.current = true
     lockSnap(next)
   }
 
   const beginDrag = (e: React.PointerEvent): void => {
+    if (e.button !== 0 || !e.isPrimary) return
+    cancelDragRef.current?.()
+    keyboardPreviewRef.current = false
     const hitEl = e.currentTarget as HTMLDivElement
+    const pointerId = e.pointerId
     downRef.current = true
     startXRef.current = e.clientX
     startYRef.current = e.clientY
@@ -222,7 +261,7 @@ export function ModelPickerPanel(props: {
       // 忽略已被捕获
     }
     const onMove = (ev: PointerEvent): void => {
-      if (!downRef.current || dragRectRef.current === null) return
+      if (!downRef.current || ev.pointerId !== pointerId || dragRectRef.current === null) return
       // 拖动阈值：平面位移越过 5px 才进入跟手（区分点击与拖动）
       if (Math.hypot(ev.clientX - startXRef.current, ev.clientY - startYRef.current) < 5) return
       const rect = dragRectRef.current
@@ -231,14 +270,30 @@ export function ModelPickerPanel(props: {
       dragRatioRef.current = clamped
       setDragRatio(clamped)
     }
-    const onEnd = (): void => {
+    const cleanup = (): void => {
       downRef.current = false
-      hitEl.removeEventListener('pointermove', onMove)
-      hitEl.removeEventListener('pointerup', onEnd)
-      hitEl.removeEventListener('pointercancel', onEnd)
-      const started = dragRatioRef.current
+      cancelDragRef.current = null
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onEnd)
+      window.removeEventListener('pointercancel', onCancel)
+      hitEl.removeEventListener('lostpointercapture', onCancel)
+      try { hitEl.releasePointerCapture(pointerId) } catch { /* Capture may already be released. */ }
+      dragRectRef.current = null
       dragRatioRef.current = null
       setDragRatio(null)
+    }
+    const cancel = (): void => {
+      cleanup()
+      snapIndexRef.current = null
+      setSnapIndex(null)
+    }
+    const onCancel = (ev: PointerEvent): void => {
+      if (ev.pointerId === pointerId && downRef.current) cancel()
+    }
+    const onEnd = (ev: PointerEvent): void => {
+      if (ev.pointerId !== pointerId || !downRef.current) return
+      const started = dragRatioRef.current
+      cleanup()
       if (!efforts || efforts.length < 2) return
       const idx = started !== null
         ? Math.min(Math.max(Math.round(started * (efforts.length - 1)), 0), efforts.length - 1)
@@ -249,9 +304,11 @@ export function ModelPickerPanel(props: {
         props.onSelectEffort?.(next.id)
       }
     }
-    hitEl.addEventListener('pointermove', onMove)
-    hitEl.addEventListener('pointerup', onEnd)
-    hitEl.addEventListener('pointercancel', onEnd)
+    cancelDragRef.current = cancel
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onEnd)
+    window.addEventListener('pointercancel', onCancel)
+    hitEl.addEventListener('lostpointercapture', onCancel)
   }
 
   // M-065：目录组名是路由 id 兜底（displayName≡id）时美化显示；真名透传
@@ -274,10 +331,7 @@ export function ModelPickerPanel(props: {
   const visibleRows = sourceRows.filter(row =>
     matchText(row.modelName) || matchText(row.modelId) || (favView && matchText(row.providerName)))
 
-  const pick = (providerId: string, modelId: string, e?: React.MouseEvent): void => {
-    if (e) {
-      (e.currentTarget as HTMLElement).blur()
-    }
+  const pick = (providerId: string, modelId: string): void => {
     const isCurrent = current?.provider === providerId && current?.model === modelId
     if (isCurrent) {
       // 点选当前已选中的模型：纯粹保持选中（no-op），杜绝连击或手抖误触闪退卡片
@@ -285,13 +339,13 @@ export function ModelPickerPanel(props: {
     }
     props.onPick(providerId, modelId)
   }
-  const toggleStar = (e: React.MouseEvent, providerId: string, modelId: string): void => {
+  const toggleStar = (e: React.SyntheticEvent, providerId: string, modelId: string): void => {
     e.stopPropagation()
     toggleFavorite(providerId, modelId)
   }
 
   return (
-    <MenuSurface className="dsh003-picker-panel" role="dialog" aria-label="选择模型" style={props.containerStyle}>
+    <MenuSurface ref={panelRef} className="dsh003-picker-panel" role="dialog" aria-label="选择模型" style={props.containerStyle} onKeyDown={onPanelKeyDown}>
       <div className="dsh003-picker-body">
         <div className="dsh003-picker-prov-col" role="tablist" aria-label="提供方">
           <div className="dsh003-picker-prov-head">
@@ -336,6 +390,7 @@ export function ModelPickerPanel(props: {
             <div className="dsh003-picker-search-box">
               <span className="dsh003-picker-search-icon"><SearchIcon /></span>
               <input
+                ref={searchRef}
                 type="text"
                 className="dsh003-picker-search"
                 placeholder={SEARCH_PLACEHOLDER}
@@ -366,7 +421,7 @@ export function ModelPickerPanel(props: {
                   data-active={active ? 'true' : 'false'}
                   data-sub={favView ? 'true' : 'false'}
                   title={row.modelName}
-                  onClick={e => pick(row.providerId, row.modelId, e)}
+                  onClick={() => pick(row.providerId, row.modelId)}
                 >
                   {favView ? (
                     <span className="dsh003-picker-model-text">
@@ -383,7 +438,12 @@ export function ModelPickerPanel(props: {
                     data-fav={favorites.has(key) ? 'true' : 'false'}
                     aria-label={favorites.has(key) ? '取消收藏' : '收藏'}
                     onClick={e => toggleStar(e, row.providerId, row.modelId)}
-                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') toggleStar(e as unknown as React.MouseEvent, row.providerId, row.modelId) }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        if (!e.repeat) toggleStar(e, row.providerId, row.modelId)
+                      }
+                    }}
                   >
                     <StarIcon filled={favorites.has(key)} />
                   </span>
@@ -398,6 +458,7 @@ export function ModelPickerPanel(props: {
           </div>
         </div>
       </div>
+      {props.partial && <p className="dsh003-picker-notice" role="status">部分提供方的模型未能加载，请检查提供方配置。</p>}
       {props.error && <p className="dsh003-picker-empty" role="alert">{props.error}</p>}
       <div className={`dsh003-picker-foot ${hasEfforts ? '' : 'dsh003-picker-foot-disabled'}`}>
         {hasEfforts ? (
@@ -422,7 +483,13 @@ export function ModelPickerPanel(props: {
                 aria-valuetext={displayedEffortName}
                 onPointerDown={beginDrag}
                 onKeyDown={onSliderKeyDown}
-                onKeyUp={commitEffort}
+                onKeyUp={e => {
+                  if (['ArrowRight', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'Home', 'End'].includes(e.key)) commitEffort()
+                }}
+                onBlur={() => {
+                  if (downRef.current) cancelDragRef.current?.()
+                  else commitEffort()
+                }}
               />
               <span
                 className="dsh003-picker-fill"

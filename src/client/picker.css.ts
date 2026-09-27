@@ -164,7 +164,8 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   box-sizing: border-box !important;
   transition: background 120ms ease, color 120ms ease, border-color 120ms ease !important;
 }
-.dsh003-picker-prov:hover {
+.dsh003-picker-prov:hover,
+.dsh003-picker-prov:focus-visible {
   background: var(--dsw-alias-interactive-bg-hover) !important;
   color: var(--dsw-alias-label-primary) !important;
 }
@@ -292,6 +293,16 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   color: var(--dsw-alias-label-secondary) !important;
 }
 
+/* 目录有部分失败时保留可用列表，并用紧凑说明解释缺失的提供方。 */
+.dsh003-picker-notice {
+  flex: none !important;
+  margin: 0 !important;
+  padding: 6px 12px !important;
+  font-size: 11px !important;
+  line-height: 16px !important;
+  color: var(--dsw-alias-label-secondary) !important;
+}
+
 /* ⑤ 模型行 */
 .dsh003-picker-model-row {
   display: flex !important;
@@ -306,7 +317,8 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   text-align: left !important;
   transition: background 120ms ease !important;
 }
-.dsh003-picker-model-row:hover {
+.dsh003-picker-model-row:hover,
+.dsh003-picker-model-row:focus-visible {
   background: var(--dsw-alias-interactive-bg-hover) !important;
 }
 .dsh003-picker-model-row[data-active="true"] {

@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 
 import { ModelPickerPanel } from './ModelPickerPanel'
+import { pickerPosition } from './picker-position'
 import { ProviderLogo } from './provider-logos'
 import { createCatalogAdapter, type ModelDirectoryFace } from './model-catalog'
 
@@ -21,18 +22,29 @@ export function ModelPickerButton({ locked = false, directory }: ModelPickerButt
   const adapter = React.useMemo(() => createCatalogAdapter(directory), [directory])
   const catalog = React.useSyncExternalStore(adapter.subscribe, adapter.getSnapshot)
   const [selectionError, setSelectionError] = React.useState<string | null>(null)
+  const selectionRequest = React.useRef(0)
+  React.useLayoutEffect(() => {
+    selectionRequest.current += 1
+    setSelectionError(null)
+    return () => { selectionRequest.current += 1 }
+  }, [adapter])
   const submit = (provider: string, model: string, effort?: string): void => {
+    const request = ++selectionRequest.current
     setSelectionError(null)
     void adapter.select(provider, model, effort).then(ok => {
-      if (!ok) setSelectionError('模型或档位切换失败，请重试。')
+      if (request !== selectionRequest.current) return
+      setSelectionError(ok ? null : '模型或档位切换失败，请重试。')
     })
   }
   const [open, setOpen] = React.useState(false)
   // 官方模型入口在右侧：弹层右缘对齐按钮右缘，向左展开。
-  const [pos, setPos] = React.useState<{ right: number; bottom: number } | null>(null)
+  const [pos, setPos] = React.useState<React.CSSProperties | null>(null)
   const buttonRef = React.useRef<HTMLButtonElement | null>(null)
 
-  const closeMenu = React.useCallback((): void => setOpen(false), [])
+  const closeMenu = React.useCallback((restoreFocus = false): void => {
+    setOpen(false)
+    if (restoreFocus) buttonRef.current?.focus({ preventScroll: true })
+  }, [])
 
   // 挂载即拉目录（idle→ready 幂等）：按钮模型名回显不等首次点开面板
   React.useEffect(() => { adapter.load() }, [adapter])
@@ -45,10 +57,7 @@ export function ModelPickerButton({ locked = false, directory }: ModelPickerButt
     const el = buttonRef.current
     if (el === null) return
     const rect = el.getBoundingClientRect()
-    const panelWidth = Math.min(320, Math.max(0, window.innerWidth - 16))
-    const right = Math.max(8, Math.min(window.innerWidth - rect.right, window.innerWidth - panelWidth - 8))
-    // 保留按钮上方 4px 间距；靠近视口边缘时限制面板在安全区内。
-    setPos({ right, bottom: window.innerHeight - rect.top + 4 })
+    setPos(pickerPosition(rect, window.innerWidth, window.innerHeight))
     adapter.load()
     setOpen(true)
   }
@@ -63,7 +72,10 @@ export function ModelPickerButton({ locked = false, directory }: ModelPickerButt
       closeMenu()
     }
     const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') closeMenu()
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        closeMenu(true)
+      }
     }
     // M-055：面板内滚动（模型/供应商列表 overflow）不动 fixed 锚点，不关；页面滚动仍关
     const onScroll = (e: Event): void => {
@@ -153,12 +165,13 @@ export function ModelPickerButton({ locked = false, directory }: ModelPickerButt
           pending={catalog.pending}
           error={selectionError ?? catalog.error}
           catalogStatus={catalog.status}
+          partial={catalog.partial}
           providers={catalog.groups}
           current={catalog.default}
-          containerStyle={{ right: pos.right, bottom: pos.bottom }}
+          containerStyle={pos}
           onPick={pick}
           onSelectEffort={handleSelectEffort}
-          onClose={closeMenu}
+          onClose={() => closeMenu(true)}
         />,
         document.body,
       )}
