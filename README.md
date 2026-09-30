@@ -4,6 +4,10 @@
 
 包名为 `@kewen/dsh-model-controls`（此前版本叫 `@dsh-std/model-picker`，改名不影响已有收藏、思考强度与供应商排序——它们按浏览器本地存储，不按包名）。插件按 [dsh-std](https://github.com/Yan-Zero/dsh-std) 社区协议声明 `apiVersion: dsh-std/v1`，协议坐标与 npm 包名相互独立。
 
+![模型控制器面板：可搜索的模型列表、左侧供应商栏与收藏星标、底部按模型记忆的推理等级滑杆](docs/screenshot.png)
+
+面板一次做完四件事：搜索模型、按供应商切换、收藏常用模型（左侧星标），以及**为当前模型单独调思考强度**——底部的推理等级滑杆按模型各自记住档位，换模型再回来还是上次那个值。
+
 ## 安装
 
 1. 到 [Releases](https://github.com/Hu9956/DSH-model-picker/releases) 下载最新的 `kewen-dsh-model-controls-<版本>.tgz`。
