@@ -38,6 +38,10 @@ npm pack
 
 在插件管理器的详情页卸载，再按宿主提示重载。包提供的插入项会随 bundle 移除，官方模型选择器接回。卸载不自动删除收藏、供应商排序和思考强度偏好；重装后这些偏好仍在。
 
+## 许可
+
+MIT，见 [LICENSE](LICENSE)。包内含 [yetone/magpie](https://github.com/yetone/magpie) 的图标（MIT），署名见 [MAGPIE_ASSET_LICENSE.md](MAGPIE_ASSET_LICENSE.md)。
+
 ## 兼容与保存位置
 
 构建依赖使用公开发布的 DSH `0.1.7-rc.2` 类型包及 Cordis `4.0.4`。宿主需要提供 `modelDirectories.directoryFor`、会话服务、`conversation.input.model` 插槽、MenuSurface 和模块加载器。此条件不代表任意旧版本或未来版本都兼容；宿主升级后应重新验证。
