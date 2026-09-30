@@ -21,15 +21,19 @@ test('built client executes with host modules and registers its session slot wit
   assert.equal(typeof exports.apply, 'function')
   const directory = {}
   let entry
+  let settingsEntry
   const services = {
     slots: {
-      inject: (key, register) => { assert.equal(key, 'conversation.input.model'); register() },
-      register: (value, component) => { entry = value; assert.equal(typeof component, 'function'); return () => {} },
+      inject: (key, register) => { assert.ok(['conversation.input.model', 'plugins.bundle.config'].includes(key)); register() },
+      register: (value, component) => { if (value.name === 'plugins.bundle.config') settingsEntry = value; else entry = value; assert.equal(typeof component, 'function'); return () => {} },
     },
     sessions: { subagentAddress: () => undefined },
     modelDirectories: { directoryFor: sessionId => { assert.equal(sessionId, 'test-session'); return directory } },
+    configForms: { get: id => { assert.equal(id, 'dsh-std-model-picker'); return {} } },
   }
   exports.apply({ get: name => services[name] })
   assert.ok(entry, 'slot registration must succeed')
+  assert.equal(settingsEntry.key, '@dsh-std/model-picker')
+  assert.ok(settingsEntry.inject().form)
   assert.deepEqual(JSON.parse(JSON.stringify(entry.inject('test-session'))), { directory: {}, available: true })
 })

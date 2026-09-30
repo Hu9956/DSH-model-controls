@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 import { runInNewContext } from 'node:vm'
 import { JSDOM } from 'jsdom'
 import { pickerPosition } from '../src/client/picker-position.ts'
+import { apply as applyHost } from '../lib/index.js'
 
 const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://picker.test' })
 const win = dom.window
@@ -24,14 +25,35 @@ const require = createRequire(import.meta.url)
 const React = require('react')
 const { createRoot } = require('react-dom/client')
 const { act } = React
+// Host module contract fixture: production receives the official form model and styled controls.
+class SettingsFormModel {
+  constructor(scope, specs) { this.scope = scope; this.spec = specs[0]; this.draft = null; this.listeners = new Set() }
+  shell() { return { available: true, writable: true, dirty: this.draft !== null, invalid: this.field().invalid, saving: false, failed: false } }
+  field() { const text = this.draft ?? this.scope.getSnapshot().value.magpieBaseURL; return { text, invalid: this.spec.parse(text) === undefined, overridden: this.draft !== null } }
+  bind(project) { let state = project(); this.publish = () => { state = project(); for (const fn of this.listeners) fn() }; return { getSnapshot: () => state, subscribe: fn => { this.listeners.add(fn); return () => this.listeners.delete(fn) } } }
+  actions() { return { edit: (_field, text) => { this.draft = text; this.publish() }, discard: () => {}, save: async () => {
+    const parsed = this.spec.parse(this.field().text); if (!parsed) return
+    await this.scope.mutate([{ op: 'set', path: [this.spec.field], value: parsed.value }], this.scope.getSnapshot().revision)
+    this.draft = null; this.publish()
+  } } }
+  dispose() {}
+}
 let descriptor
 runInNewContext(readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8'), {
-  document: win.document, Element: win.Element, Node: win.Node, console,
+  document: win.document, Element: win.Element, Node: win.Node, URL: win.URL, console,
   // Only the loader belongs to the fake host; events and hooks use a real DOM and React.
   window: Object.assign(win, { __ModuleLoader__: { load: value => { descriptor = value } } }),
 })
 const plugin = descriptor.factory(name => name === '@deepseek-ai/dsh-client-ui-primitives'
-  ? { MenuSurface: React.forwardRef((props, ref) => React.createElement('div', { ...props, ref })), IconChevronDownOutlineRegular: () => null }
+  ? {
+    SettingsFormModel,
+    SettingsForm: ({ children, onSave, state }) => React.createElement('form', { onSubmit: event => { event.preventDefault(); onSave() } }, children,
+      React.createElement('button', { type: 'submit', disabled: !state.dirty || state.invalid || state.saving }, '保存')),
+    SettingsValueField: ({ id, label, text, invalid, onEdit }) => React.createElement(React.Fragment, null,
+      React.createElement('label', { htmlFor: id }, label),
+      React.createElement('input', { id, value: text, 'aria-invalid': invalid, onChange: event => onEdit(event.target.value) })),
+    MenuSurface: React.forwardRef((props, ref) => React.createElement('div', { ...props, ref })), IconChevronDownOutlineRegular: () => null,
+  }
   : require(name))
 let root
 beforeEach(() => {
@@ -70,6 +92,32 @@ const pointer = async (target, type, pointerId = 1, clientX = 280, clientY = 410
   await action(() => target.dispatchEvent(event))
 }
 function deferred() { let resolve; const promise = new Promise(fn => { resolve = fn }); return { promise, resolve } }
+
+test('plugin settings renders its labeled address, saves and clears through the official form', async () => {
+  let state = { status: 'ready', writable: true, revision: 3, base: {}, user: {}, value: { magpieBaseURL: '' } }
+  const calls = []
+  const form = { getSnapshot: () => state, subscribe: () => () => {}, mutate: async (ops, revision) => {
+    calls.push({ ops, revision }); state = { ...state, value: { magpieBaseURL: ops[0].value } }; return true
+  } }
+  await action(() => root.render(React.createElement(plugin.ModelControlsSettings, { view: 'page', form })))
+  const input = query('#dsh-model-controls-magpie')
+  assert.equal(query('label').htmlFor, input.id)
+  async function edit(value) { await action(() => {
+    Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set.call(input, value)
+    input.dispatchEvent(new win.Event('input', { bubbles: true }))
+  }) }
+  await edit('http://127.0.0.1:3425/v1')
+  await action(() => query('form').dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true })))
+  assert.equal(calls[0].ops[0].value, 'http://127.0.0.1:3425/v1')
+  assert.equal(calls[0].revision, 3)
+  await edit('')
+  await action(() => query('form').dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true })))
+  assert.equal(calls[1].ops[0].value, '')
+  await edit('http://user:secret@localhost/v1')
+  await action(() => query('form').dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true })))
+  assert.equal(calls.length, 2)
+  assert.equal(input.getAttribute('aria-invalid'), 'true')
+})
 
 test('pointercancel restores the confirmed effort and sends no selection', async () => {
   const f = fixture(); await render(f.directory); await open()
@@ -352,6 +400,42 @@ test('without an explicit identity, the same route remains DeepSeek', async () =
   await render(f.directory); await open()
   assert.equal(query('[data-provider-id="deepseek-official"]').getAttribute('aria-label'), 'DeepSeek')
   assert.equal(query('.dsh003-picker-btn .dsh003-provider-initial'), null)
+})
+
+test('removing Magpie routing restores button, supplier and existing favorite identity after reload', async () => {
+  let baseURL = 'http://127.0.0.1:3425/v1'
+  let inject
+  applyHost({
+    get: name => name === 'loader' ? { entries: () => [{
+      options: { name: '@deepseek-ai/dsh-llm-deepseek-api-key' }, disabled: false,
+      fiber: { state: 2, config: { baseURL: { get: () => baseURL } } },
+    }] } : undefined,
+    on: (_event, handler) => { inject = handler },
+  }, { displayProviders: { 'deepseek-official': { name: 'Magpie', icon: 'magpie', whenBaseURL: baseURL } } })
+  const pageLoad = () => { const rows = []; inject(rows); win.__DSH_MODEL_PICKER_DISPLAY_PROVIDERS__ = rows[0].value }
+  const f = fixture()
+  f.publish({ current: { provider: 'deepseek-official', model: 'restore-test' }, groups: [
+    { id: 'deepseek-official', name: 'DeepSeek', models: [{ id: 'restore-test', name: 'DeepSeek Flash' }] },
+  ] })
+  pageLoad(); await render(f.directory); await open()
+  assert.equal(query('[data-provider-id="deepseek-official"]').getAttribute('aria-label'), 'Magpie')
+  assert.equal(query('.dsh003-picker-btn svg')?.getAttribute('viewBox'), '0 5 44 34')
+  const star = rows()[0].querySelector('.dsh003-picker-row-star')
+  if (star.dataset.fav !== 'true') await action(() => star.click())
+  await action(() => query('.dsh003-picker-prov-fav').click())
+  assert.equal(query('.dsh003-picker-model-sub').textContent, 'Magpie')
+  const stored = win.localStorage.getItem('dsh003.model-picker.favorites')
+  await action(() => root.render(null))
+  baseURL = undefined; pageLoad()
+  await render(f.directory); await open()
+  assert.equal(query('[data-provider-id="deepseek-official"]').getAttribute('aria-label'), 'DeepSeek')
+  assert.notEqual(query('.dsh003-picker-btn svg')?.getAttribute('viewBox'), '0 5 44 34')
+  await action(() => query('.dsh003-picker-prov-fav').click())
+  assert.equal(query('.dsh003-picker-model-sub').textContent, 'DeepSeek')
+  assert.equal(win.localStorage.getItem('dsh003.model-picker.favorites'), stored)
+  assert.equal(f.calls.length, 0)
+  // Restore the shared view for subsequent interaction scenarios.
+  await action(() => query('.dsh003-picker-prov-fav').click())
 })
 
 test('unknown providers still render their initial with the existing small badge', async () => {

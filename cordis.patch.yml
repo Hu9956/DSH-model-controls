@@ -1,0 +1,3 @@
+- insert:
+    - id: dsh-std-model-picker
+      name: '@dsh-std/model-picker'

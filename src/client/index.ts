@@ -11,6 +11,7 @@ type SlotsApi = {
       key?: string
       order?: number
       priority?: number
+      label?: string
       inject?: (sessionId: SessionId) => Record<string, unknown>
     },
     component: unknown,
@@ -20,6 +21,8 @@ type SlotsApi = {
 import { ModelControlsEntry } from './ModelControlsEntry'
 import type { ModelDirectoryFace } from './model-catalog'
 import { pickerCss } from './picker.css'
+import { ModelControlsSettings, type ControlsForm } from './ModelControlsSettings'
+export { ModelControlsSettings } from './ModelControlsSettings'
 
 export { ModelControlsEntry } from './ModelControlsEntry'
 export { ModelPickerButton } from './ModelPickerButton'
@@ -38,13 +41,23 @@ function injectStylesOnce(): void {
   document.head.appendChild(style)
 }
 
-export const inject = ['slots', 'sessions', 'remote', 'remote.session', 'modelDirectories']
+export const inject = ['slots', 'sessions', 'remote', 'remote.session', 'modelDirectories', 'configForms']
 
 export function apply(ctx: ClientContext): void {
   injectStylesOnce()
 
   try {
     const slots = ctx.get('slots') as SlotsApi | undefined
+    const forms = ctx.get('configForms') as { get(id: string): ControlsForm } | undefined
+    if (slots && forms) {
+      const namespace = typeof window === 'undefined' ? 'dsh-std-model-picker'
+        : (window as unknown as Record<string, unknown>).__DSH_MODEL_CONTROLS_NAMESPACE__
+      const form = forms.get(typeof namespace === 'string' ? namespace : 'dsh-std-model-picker')
+      slots.inject('plugins.bundle.config', () => slots.register({
+        name: 'plugins.bundle.config', key: '@dsh-std/model-picker',
+        inject: () => ({ form }),
+      }, ModelControlsSettings))
+    }
     const sessions = ctx.get('sessions') as Pick<ISessions, 'subagentAddress'> | undefined
     const directories = ctx.get('modelDirectories') as { directoryFor(sessionId: SessionId): ModelDirectoryFace }
     if (slots) {
