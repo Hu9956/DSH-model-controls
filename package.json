@@ -77,11 +77,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Hu9956/DSH-model-picker.git"
+    "url": "git+https://github.com/Hu9956/DSH-model-controls.git"
   },
-  "homepage": "https://github.com/Hu9956/DSH-model-picker#readme",
+  "homepage": "https://github.com/Hu9956/DSH-model-controls#readme",
   "bugs": {
-    "url": "https://github.com/Hu9956/DSH-model-picker/issues"
+    "url": "https://github.com/Hu9956/DSH-model-controls/issues"
   },
   "keywords": [
     "dsh",
