@@ -1,6 +1,6 @@
 {
-  "name": "@dsh-std/model-picker",
-  "version": "0.1.2",
+  "name": "@kewen/dsh-model-controls",
+  "version": "0.2.0",
   "private": true,
   "description": "DSH 模型控制器：切换模型、调节思考强度、收藏模型与调整供应商顺序。",
   "type": "module",
@@ -55,7 +55,8 @@
     "MAGPIE_ASSET_LICENSE.md",
     "locale/",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "dependencies": {
     "@deepseek-ai/schemastery": "3.18.4"
@@ -72,5 +73,21 @@
     "tsdown": "0.22.2",
     "tsx": "4.22.4",
     "typescript": "6.0.3"
-  }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hu9956/DSH-model-picker.git"
+  },
+  "homepage": "https://github.com/Hu9956/DSH-model-picker#readme",
+  "bugs": {
+    "url": "https://github.com/Hu9956/DSH-model-picker/issues"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "model",
+    "reasoning-effort"
+  ]
 }

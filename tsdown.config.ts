@@ -7,7 +7,7 @@ const PLATFORM_MODULES = [
   '@deepseek-ai/dsh-client-ui-primitives', '@deepseek-ai/dsh-client-ui-dockkit',
 ] as const
 
-const id = '@dsh-std/model-picker'
+const id = '@kewen/dsh-model-controls'
 const baseline = new Set<string>(PLATFORM_MODULES)
 export default {
   entry: { client: 'src/client/index.ts' },

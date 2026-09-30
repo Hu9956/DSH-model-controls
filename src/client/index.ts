@@ -54,7 +54,7 @@ export function apply(ctx: ClientContext): void {
         : (window as unknown as Record<string, unknown>).__DSH_MODEL_CONTROLS_NAMESPACE__
       const form = forms.get(typeof namespace === 'string' ? namespace : 'dsh-std-model-picker')
       slots.inject('plugins.bundle.config', () => slots.register({
-        name: 'plugins.bundle.config', key: '@dsh-std/model-picker',
+        name: 'plugins.bundle.config', key: '@kewen/dsh-model-controls',
         inject: () => ({ form }),
       }, ModelControlsSettings))
     }

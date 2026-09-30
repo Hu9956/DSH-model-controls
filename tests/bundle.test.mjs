@@ -10,7 +10,7 @@ test('built client executes with host modules and registers its session slot wit
   runInNewContext(readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8'), {
     window: { __ModuleLoader__: { load: value => { descriptor = value } } }, console,
   })
-  assert.equal(descriptor.id, '@dsh-std/model-picker')
+  assert.equal(descriptor.id, '@kewen/dsh-model-controls')
   const exports = descriptor.factory(name => {
     if (name === '@deepseek-ai/dsh-client-ui-primitives') {
       return { MenuSurface: () => null, IconChevronDownOutlineRegular: () => null }
@@ -33,7 +33,7 @@ test('built client executes with host modules and registers its session slot wit
   }
   exports.apply({ get: name => services[name] })
   assert.ok(entry, 'slot registration must succeed')
-  assert.equal(settingsEntry.key, '@dsh-std/model-picker')
+  assert.equal(settingsEntry.key, '@kewen/dsh-model-controls')
   assert.ok(settingsEntry.inject().form)
   assert.deepEqual(JSON.parse(JSON.stringify(entry.inject('test-session'))), { directory: {}, available: true })
 })

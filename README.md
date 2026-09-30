@@ -1,10 +1,18 @@
 # DSH 模型控制器（DSH Model Controls）
 
-官方 DeepSeek Harness 的模型控制插件：切换模型、调节思考强度、收藏模型与调整供应商顺序。源码、构建工具和产物均在本目录；构建不需要 DSH003。运行时使用宿主提供的 React、插槽、模型目录和 MenuSurface。显示名称为 DSH 模型控制器；包名、插件 id 和已有偏好存储键保持兼容。
+官方 DeepSeek Harness 的模型控制插件：切换模型、调节思考强度、收藏模型与调整供应商顺序。源码、构建工具和产物均在本目录；构建不需要 DSH003。运行时使用宿主提供的 React、插槽、模型目录和 MenuSurface。界面名称为 DSH 模型控制器。
 
-## 构建与验证
+包名为 `@kewen/dsh-model-controls`（此前版本叫 `@dsh-std/model-picker`，改名不影响已有收藏、思考强度与供应商排序——它们按浏览器本地存储，不按包名）。插件按 [dsh-std](https://github.com/Yan-Zero/dsh-std) 社区协议声明 `apiVersion: dsh-std/v1`，协议坐标与 npm 包名相互独立。
 
-需要 Node.js 22.18+（或 24+）及 npm：
+## 安装
+
+1. 到 [Releases](https://github.com/Hu9956/DSH-model-picker/releases) 下载最新的 `kewen-dsh-model-controls-<版本>.tgz`。
+2. 在 DSH 插件页的安装入口填写该文件的绝对路径，例如 `/Users/你的用户名/Downloads/kewen-dsh-model-controls-0.2.0.tgz`。
+3. 按宿主提示重载。插件应列在 **已安装** 中，名称为 **DSH 模型控制器**；详情页提供配置、启用/禁用和卸载入口。
+
+安装包声明 `dsh.bundle.patch`，由官方管理器安装依赖、加入 profile bundle 并加载插件，不需要手工添加插入项。插件通过优先级接管官方 model 插槽，禁用后由官方选择器接回。避免同时保留旧的绝对路径插入项，以免重复加载。
+
+自己构建安装包：
 
 ```sh
 npm ci --ignore-scripts
@@ -12,50 +20,23 @@ npm run verify
 npm pack
 ```
 
-`package-lock.json` 锁定依赖版本。`lib/` 保存已构建产物，桌面版运行不需要安装本目录的开发依赖。npm 包包含运行产物和此说明；本目录还保存源代码、测试及构建配置。
-
-## 安装
-
-执行 `npm pack` 生成 `.tgz` 安装包。在官方 DSH 插件页的安装入口填写该文件的绝对路径，例如 `/Users/你的用户名/Downloads/dsh-std-model-picker-0.1.0.tgz`。安装包声明 `dsh.bundle.patch`，由官方管理器安装依赖、加入 profile bundle 并加载插件。重载后，它应列在 **已安装** 中，名称为 **DSH 模型控制器**；详情提供配置、启用/禁用和卸载入口。
-
-从本机路径加载方式迁移时，移除个人配置里的旧 `insert` 行，保留同 id 的设置覆盖：
-
-```yaml
-- id: dsh-std-model-picker
-  config:
-    magpieBaseURL: http://127.0.0.1:3425/v1
-```
-
-不需要手工添加插件插入项；安装包中的 `cordis.patch.yml` 已提供它。避免同时保留旧绝对路径插入项，以免重复加载。插件通过优先级接管官方 model 插槽，禁用后由官方选择器接回。
-
 ### 路由器显示身份（可选）
 
-**标准 Magpie 接入无需填写地址。**插件读取唯一活动的 DeepSeek API-key 供应商已接受的运行配置：凭据引用为 `MAGPIE_API_KEY`，且请求地址为回环主机（127.0.0.1、localhost 或 ::1）的 `/v1` 接口时，自动显示 Magpie。依据已核对的 Magpie `internal/agent/dsh.go` 接入实现；不读取密钥内容，不根据模型名称猜测，不固定端口。撤掉路由后刷新界面恢复原供应商。
+**标准 Magpie 接入无需填写任何设置。**插件读取唯一活动的 DeepSeek API-key 供应商已接受的运行配置：凭据引用为 `MAGPIE_API_KEY`，且请求地址为回环主机（127.0.0.1、localhost 或 ::1）的 `/v1` 接口时，自动显示 Magpie。依据已核对的 Magpie `internal/agent/dsh.go` 接入实现；不读取密钥内容，不根据模型名称猜测，不固定端口。撤掉路由后刷新界面恢复原供应商。
 
-在 **已安装 → DSH 模型控制器 → 高级设置** 中提供 **备用 Magpie 接口地址**，仅用于自定义接入未被识别的情况。留空使用自动识别，不会关闭标准 Magpie 识别。表单复用 DSH 官方 `SettingsForm`、`SettingsValueField` 和 `SettingsFormModel`，通过官方配置服务持久保存；不修改请求路由。首次更新插件需重载桌面版，之后保存或切换路由后刷新界面。
+在 **已安装 → DSH 模型控制器** 中提供 **备用 Magpie 接口地址**，仅用于自定义接入未被识别的情况；留空使用自动识别。表单复用 DSH 官方 `SettingsForm`、`SettingsValueField` 和 `SettingsFormModel`，通过官方配置服务持久保存，不修改请求路由。
 
-这项设置只识别已经配置好的路由，不会安装、启动 Magpie，也不会替你修改 Harness 请求地址。仅安装了 Magpie 而未填写本设置，不会自动显示 Magpie。若把 Harness 的 `deepseek-official` 请求地址改到 Magpie，模型目录的真实提供方 ID 仍是 `deepseek-official`。
+这项设置只识别已经配置好的路由，不会安装、启动 Magpie，也不会替你修改 Harness 请求地址。仅安装了 Magpie 而请求地址未改动时，不会显示 Magpie。若把 Harness 的 `deepseek-official` 请求地址改到 Magpie，模型目录的真实提供方 ID 仍是 `deepseek-official`，只有展示名称与图标改变。
 
-也可通过配置文件预置该设置：
-
-```yaml
-      config:
-        magpieBaseURL: http://127.0.0.1:3425/v1
-```
-
-插件在每次页面加载时读取 Harness 已接受的运行配置；只有 DeepSeek API-key 供应商的请求地址与设置地址匹配，才显示 Magpie。撤掉路由或改回 DeepSeek 后刷新界面，就恢复 DeepSeek 图标及收藏来源。端口或路径不同也不匹配；读取不到运行状态时保留原供应商身份。地址须以 `http://` 或 `https://` 开头，不应包含账号密码、查询参数或片段。
-
-从旧版升级时，标准 Magpie 接入可清空 `magpieBaseURL` 使用自动识别；自定义接入可继续保留备用地址。旧 `displayProviders` 别名不会覆盖新版设置。
-
-这只改变模型入口、提供方栏及收藏夹的展示名称/图标（`magpie` 使用 [yetone/magpie](https://github.com/yetone/magpie) 的原始 SVG，收紧留白并继承界面文字颜色；原项目为 MIT 许可）；实际请求提供方、模型 ID、收藏与思考强度存储键均不变。已打开的页面不会自动更新这项判断，切换路由后需刷新界面；首次更新插件需重载桌面版。不要仅凭模型名称、密钥名称或“本地地址”猜测路由来源。
+显示身份只改变模型入口、提供方栏及收藏夹的名称/图标（`magpie` 使用 [yetone/magpie](https://github.com/yetone/magpie) 的原始 SVG，收紧留白并继承界面文字颜色；原项目为 MIT 许可）；实际请求提供方、模型 ID、收藏与思考强度存储键均不变。切换路由后需刷新界面才会重新判断。不要仅凭模型名称、密钥名称或“本地地址”猜测路由来源。
 
 ## 更新与回退
 
-更新前保留旧安装包与个人配置；构建、测试并打包后，通过插件管理器安装新版安装包，再按宿主提示重载。安装后运行的是 profile 中的包副本，修改源码目录不会自动更新已安装版本；回退时安装保留的旧包。
+更新前保留旧安装包。下载或构建新版安装包后，通过插件管理器安装，再按宿主提示重载。安装后运行的是 profile 中的包副本，修改源码目录不会自动更新已安装版本；回退时安装保留的旧包。
 
 ## 卸载
 
-在插件管理器的详情页卸载，再按宿主提示重载。包提供的插入项会随 bundle 移除，官方模型选择器接回。个人配置中的同 id 设置覆盖可以保留，供以后重装使用；卸载不自动删除收藏、供应商排序和思考强度偏好。
+在插件管理器的详情页卸载，再按宿主提示重载。包提供的插入项会随 bundle 移除，官方模型选择器接回。卸载不自动删除收藏、供应商排序和思考强度偏好；重装后这些偏好仍在。
 
 ## 兼容与保存位置
 
