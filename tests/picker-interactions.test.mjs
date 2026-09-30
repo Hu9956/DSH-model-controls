@@ -49,9 +49,9 @@ const plugin = descriptor.factory(name => name === '@deepseek-ai/dsh-client-ui-p
     SettingsFormModel,
     SettingsForm: ({ children, onSave, state }) => React.createElement('form', { onSubmit: event => { event.preventDefault(); onSave() } }, children,
       React.createElement('button', { type: 'submit', disabled: !state.dirty || state.invalid || state.saving }, '保存')),
-    SettingsValueField: ({ id, label, text, invalid, onEdit }) => React.createElement(React.Fragment, null,
+    SettingsValueField: ({ id, label, text, invalid, placeholder, onEdit }) => React.createElement(React.Fragment, null,
       React.createElement('label', { htmlFor: id }, label),
-      React.createElement('input', { id, value: text, 'aria-invalid': invalid, onChange: event => onEdit(event.target.value) })),
+      React.createElement('input', { id, value: text, placeholder, 'aria-invalid': invalid, onChange: event => onEdit(event.target.value) })),
     MenuSurface: React.forwardRef((props, ref) => React.createElement('div', { ...props, ref })), IconChevronDownOutlineRegular: () => null,
   }
   : require(name))
@@ -102,6 +102,9 @@ test('plugin settings renders its labeled address, saves and clears through the 
   await action(() => root.render(React.createElement(plugin.ModelControlsSettings, { view: 'page', form })))
   const input = query('#dsh-model-controls-magpie')
   assert.equal(query('label').htmlFor, input.id)
+  // The page must use official settings components only: no hand-rolled disclosure box.
+  assert.equal(query('details, summary'), null)
+  assert.equal(input.getAttribute('placeholder'), '例如 http://127.0.0.1:3425/v1')
   async function edit(value) { await action(() => {
     Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set.call(input, value)
     input.dispatchEvent(new win.Event('input', { bubbles: true }))

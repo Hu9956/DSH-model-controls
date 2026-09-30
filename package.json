@@ -1,6 +1,6 @@
 {
   "name": "@dsh-std/model-picker",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "DSH 模型控制器：切换模型、调节思考强度、收藏模型与调整供应商顺序。",
   "type": "module",
@@ -12,7 +12,9 @@
     "./locale/*": "./locale/*"
   },
   "dsh": {
-    "bundle": { "patch": "./cordis.patch.yml" },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "inject": [
         "@deepseek-ai/dsh-api-session-controller",
@@ -35,7 +37,9 @@
     "platforms": [
       "web"
     ],
-    "permissions": ["settings"],
+    "permissions": [
+      "settings"
+    ],
     "applies": "restart"
   },
   "scripts": {
