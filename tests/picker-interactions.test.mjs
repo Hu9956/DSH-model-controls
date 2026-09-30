@@ -36,6 +36,7 @@ const plugin = descriptor.factory(name => name === '@deepseek-ai/dsh-client-ui-p
 let root
 beforeEach(() => {
   win.document.body.innerHTML = '<div id="app"></div>'
+  delete win.__DSH_MODEL_PICKER_DISPLAY_PROVIDERS__
   root = createRoot(win.document.querySelector('#app'))
 })
 afterEach(async () => { await act(async () => { root.unmount() }) })
@@ -317,6 +318,50 @@ test('a search with no results shows only the search empty message', async () =>
   const messages = [...win.document.querySelectorAll('.dsh003-picker-model-list p')]
   assert.equal(messages.length, 1)
   assert.equal(messages[0].textContent, '没有匹配的模型。')
+})
+
+test('explicit gateway identity changes only display, preserving provider/model selection and favorite keys', async () => {
+  win.__DSH_MODEL_PICKER_DISPLAY_PROVIDERS__ = { 'deepseek-official': { name: 'Magpie', icon: 'magpie' } }
+  const f = fixture()
+  f.publish({
+    current: { provider: 'deepseek-official', model: 'opencode-go/space-bunny-free' },
+    groups: [{ id: 'deepseek-official', name: 'DeepSeek', models: [
+      { id: 'opencode-go/space-bunny-free', name: 'Space Bunny Free · OpenCode Go' },
+      { id: 'group/auto-glm', name: 'GLM · routing group' },
+    ] }],
+  })
+  await render(f.directory)
+  assert.equal(query('.dsh003-picker-btn .dsh003-provider-logo svg')?.getAttribute('viewBox'), '0 5 44 34')
+  await open()
+  assert.equal(query('[data-provider-id="deepseek-official"]').getAttribute('aria-label'), 'Magpie')
+  await action(() => rows()[0].querySelector('.dsh003-picker-row-star').click())
+  await action(() => query('.dsh003-picker-prov-fav').click())
+  assert.equal(query('.dsh003-picker-model-sub').textContent, 'Magpie')
+  assert.deepEqual(JSON.parse(win.localStorage.getItem('dsh003.model-picker.favorites')).includes('deepseek-official/opencode-go/space-bunny-free'), true)
+  await action(() => query('.dsh003-picker-prov-fav').click())
+  await action(() => rows()[1].click())
+  assert.equal(f.calls[0].provider, 'deepseek-official')
+  assert.equal(f.calls[0].model, 'group/auto-glm')
+})
+
+test('without an explicit identity, the same route remains DeepSeek', async () => {
+  const f = fixture()
+  f.publish({ current: { provider: 'deepseek-official', model: 'm' }, groups: [
+    { id: 'deepseek-official', name: 'DeepSeek', models: [{ id: 'm', name: 'M' }] },
+  ] })
+  await render(f.directory); await open()
+  assert.equal(query('[data-provider-id="deepseek-official"]').getAttribute('aria-label'), 'DeepSeek')
+  assert.equal(query('.dsh003-picker-btn .dsh003-provider-initial'), null)
+})
+
+test('unknown providers still render their initial with the existing small badge', async () => {
+  const f = fixture()
+  f.publish({ current: { provider: 'custom-lingsuan', model: 'm' }, groups: [
+    { id: 'custom-lingsuan', name: '灵算', models: [{ id: 'm', name: 'M' }] },
+  ] })
+  await render(f.directory)
+  const icon = query('.dsh003-picker-btn .dsh003-provider-initial--sm')
+  assert.equal(icon?.textContent, '灵')
 })
 
 test('cached lists still reflect favorite changes and catalog updates under an active search', async () => {

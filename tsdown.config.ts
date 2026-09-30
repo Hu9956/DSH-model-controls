@@ -1,4 +1,6 @@
 // Host-shared module identities; React and UI primitives must stay external.
+import { readFile } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
 const PLATFORM_MODULES = [
   'react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', '@deepseek-ai/cordis',
   '@deepseek-ai/dsh-client-store', '@deepseek-ai/dsh-client-ui-slots',
@@ -15,6 +17,20 @@ export default {
   dts: false,
   sourcemap: true,
   clean: false,
+  plugins: [{
+    name: 'magpie-svg-raw',
+    resolveId(source: string) {
+      return source === './magpie.svg?raw'
+        ? `${fileURLToPath(new URL('./src/client/magpie.svg', import.meta.url))}?raw`
+        : null
+    },
+    async load(id: string) {
+      const path = fileURLToPath(new URL('./src/client/magpie.svg', import.meta.url))
+      if (id !== `${path}?raw`) return null
+      this.addWatchFile(path)
+      return `export default ${JSON.stringify(await readFile(path, 'utf8'))}`
+    },
+  }],
   deps: {
     neverBundle: (s: string) => baseline.has(s),
     alwaysBundle: (s: string) => !baseline.has(s),

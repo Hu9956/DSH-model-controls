@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -17,5 +17,5 @@ for (const [tool, ...args] of commands[mode]) {
 }
 if (mode === 'bundle') {
   mkdirSync(resolve(here, 'lib'), { recursive: true })
-  writeFileSync(resolve(here, 'lib/index.js'), 'export function apply() {}\n')
+  copyFileSync(resolve(here, 'src/index.js'), resolve(here, 'lib/index.js'))
 }

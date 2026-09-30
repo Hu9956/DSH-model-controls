@@ -26,6 +26,20 @@ npm pack
 
 若使用打包产物，先解压到稳定目录，再将 name 指向其 `lib/index.js`。保留已有替换官方 model 插槽的配置。重载官方桌面版后生效。
 
+### 路由器显示身份（可选）
+
+若把 Harness 的 `deepseek-official` 请求地址改到 Magpie，模型目录的真实提供方 ID 仍是 `deepseek-official`。可在上述插件插入项添加：
+
+```yaml
+      config:
+        displayProviders:
+          deepseek-official:
+            name: Magpie
+            icon: magpie
+```
+
+这只改变模型入口、提供方栏及收藏夹的展示名称/图标（`magpie` 使用 [yetone/magpie](https://github.com/yetone/magpie) 的原始 SVG，收紧留白并继承界面文字颜色；原项目为 MIT 许可）；实际请求提供方、模型 ID、收藏与思考强度存储键均不变。直连 DeepSeek 时移除该映射并重载，避免误标。不要仅凭模型名称猜测路由来源。
+
 ## 更新与回退
 
 更新前备份本目录和配置。先在其他目录执行构建、测试，再替换运行产物并重载桌面版；若失败，恢复旧目录或旧配置路径。不要直接删除仍被配置引用的目录。

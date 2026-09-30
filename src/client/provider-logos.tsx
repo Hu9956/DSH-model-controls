@@ -15,6 +15,7 @@
  * dangerouslySetInnerHTML 注入的是本文件构建期常量（快照 SVG 原文），无任何运行期/用户输入拼入。
  */
 import * as React from 'react'
+import magpieSvg from './magpie.svg?raw'
 
 /** 首字母兜底：无 logo 的 provider 渲染展示名首个可见字符（自 ModelPickerPanel 迁入）。 */
 function providerInitial(name: string): string {
@@ -183,6 +184,10 @@ export function resolveProviderLogo(providerId: string | null | undefined): stri
 /** 左栏/触发按钮提供方 logo：命中渲染内联 SVG（aria-hidden，色彩继承文本色），未命中回退首字母文本。
  * M-056：small=true 为触发按钮 14px 小档，logo 与首字母回退同用 `.dsh003-provider-logo--sm` 盒。 */
 export function ProviderLogo(props: { providerId: string; name: string; small?: boolean }): React.ReactNode {
+  if (props.providerId === 'magpie') {
+    const cls = props.small === true ? 'dsh003-provider-logo dsh003-provider-logo--sm' : 'dsh003-provider-logo'
+    return <span className={cls} aria-hidden="true" dangerouslySetInnerHTML={{ __html: magpieSvg }} />
+  }
   const svg = resolveProviderLogo(props.providerId)
   const cls = props.small === true ? 'dsh003-provider-logo dsh003-provider-logo--sm' : 'dsh003-provider-logo'
   if (svg === null) {

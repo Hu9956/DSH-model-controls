@@ -7,6 +7,7 @@ import { IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primit
 import { ModelPickerPanel } from './ModelPickerPanel'
 import { pickerPosition } from './picker-position'
 import { ProviderLogo } from './provider-logos'
+import { displayProviderIcon } from './display-identity'
 import { createCatalogAdapter, type ModelDirectoryFace } from './model-catalog'
 
 const FALLBACK_LABEL = '模型'
@@ -157,7 +158,7 @@ export function ModelPickerButton({ locked = false, directory }: ModelPickerButt
         onClick={toggle}
       >
         {currentGroup !== undefined && (
-          <ProviderLogo providerId={currentGroup.id} name={currentGroup.name} small />
+          <ProviderLogo {...displayProviderIcon(currentGroup)} small />
         )}
         <span className="dsh003-picker-btn-label">{currentModelName ?? FALLBACK_LABEL}</span>
         {currentEffortName !== null && (

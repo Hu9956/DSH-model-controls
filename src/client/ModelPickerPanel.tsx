@@ -10,8 +10,8 @@ import * as React from 'react'
 import { MenuSurface } from '@deepseek-ai/dsh-client-ui-primitives'
 
 import { favoriteKeyOf, getFavoriteSet, subscribeFavorites, toggleFavorite } from './picker-data'
-import { prettifyProviderName } from './provider-names'
 import { ProviderLogo } from './provider-logos'
+import { displayProviderIcon, displayProviderName } from './display-identity'
 import type { CatalogGroupSnapshot } from './model-catalog'
 import { useProviderSort } from './use-provider-sort'
 
@@ -23,10 +23,6 @@ const LOADING_TEXT = '正在加载模型目录…'
 const LOAD_FAILED_TEXT = '模型目录加载失败，请稍后重试。'
 const EMPTY_GROUP_TEXT = '该提供方暂未公布模型。'
 const EMPTY_CATALOG_TEXT = '暂无可用模型，请检查提供方配置。'
-
-function providerNameOf(provider: { id: string; name: string }): string {
-  return prettifyProviderName(provider.id, provider.name)
-}
 
 function StarIcon(props: { filled: boolean }): React.ReactNode {
   // lucide star（24 viewBox）：统一保留 2px 描边边界，避免实心填充消除描边外扩导致视觉缩小（10%跳变）
@@ -332,7 +328,7 @@ export function ModelPickerPanel(props: {
     for (const provider of providers) {
       for (const model of provider.models) {
         if (favorites.has(favoriteKeyOf(provider.id, model.id))) {
-          rows.push({ providerId: provider.id, providerName: providerNameOf(provider), modelId: model.id, modelName: model.name })
+          rows.push({ providerId: provider.id, providerName: displayProviderName(provider), modelId: model.id, modelName: model.name })
         }
       }
     }
@@ -343,7 +339,7 @@ export function ModelPickerPanel(props: {
   const sourceRows = React.useMemo(() => {
     if (favView) return favoriteRows
     if (!activeProvider) return []
-    return activeProvider.models.map(model => ({ providerId: activeProvider.id, providerName: providerNameOf(activeProvider), modelId: model.id, modelName: model.name }))
+    return activeProvider.models.map(model => ({ providerId: activeProvider.id, providerName: displayProviderName(activeProvider), modelId: model.id, modelName: model.name }))
   }, [favView, favoriteRows, activeProvider])
   const visibleRows = React.useMemo(() => {
     const matches = (text: string): boolean => text.toLocaleLowerCase().includes(normalized)
@@ -400,8 +396,8 @@ export function ModelPickerPanel(props: {
                 data-insert={providerSort.drag?.before === provider.id ? 'before' : undefined}
                 style={providerSort.drag?.id === provider.id ? { transform: `translateY(${providerSort.drag.offset}px)` } : undefined}
                 data-active={!favView && provider.id === activeProvider?.id ? 'true' : 'false'}
-                aria-label={providerNameOf(provider)}
-                title={`${providerNameOf(provider)} · 长按拖动排序（Alt + ↑/↓）`}
+                aria-label={displayProviderName(provider)}
+                title={`${displayProviderName(provider)} · 长按拖动排序（Alt + ↑/↓）`}
                 onPointerDown={event => providerSort.begin(event, provider.id)}
                 onClickCapture={providerSort.suppressClick}
                 onKeyDown={event => providerSort.keyboardMove(event, provider.id)}
@@ -413,7 +409,7 @@ export function ModelPickerPanel(props: {
                   setActiveProviderId(provider.id)
                 }}
               >
-                <ProviderLogo providerId={provider.id} name={provider.name} />
+                <ProviderLogo {...displayProviderIcon(provider)} />
               </button>
             ))}
             {providerSort.drag?.before === null && <span className="dsh003-picker-prov-insert-end" aria-hidden="true" />}
