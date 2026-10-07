@@ -46,7 +46,8 @@
     "bundle": "node run.mjs bundle",
     "typecheck": "node run.mjs typecheck",
     "test": "node --import tsx --test tests/*.test.ts tests/*.test.mjs",
-    "verify": "npm run bundle && npm test"
+    "verify": "npm run bundle && npm test",
+    "check:install": "node tools/install-check.mjs"
   },
   "files": [
     "lib/index.js",
@@ -72,7 +73,8 @@
     "react-dom": "18.3.1",
     "tsdown": "0.22.2",
     "tsx": "4.22.4",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "yaml": "2.9.1"
   },
   "license": "MIT",
   "repository": {
