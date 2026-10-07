@@ -1,6 +1,6 @@
 {
   "name": "@kewen/dsh-model-controls",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "private": true,
   "description": "DSH 模型控制器：切换模型、调节思考强度、收藏模型与调整供应商顺序。",
   "type": "module",

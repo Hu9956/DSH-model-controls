@@ -12,17 +12,13 @@ import { MenuSurface } from '@deepseek-ai/dsh-client-ui-primitives'
 import { favoriteKeyOf, getFavoriteSet, subscribeFavorites, toggleFavorite } from './picker-data'
 import { ProviderLogo } from './provider-logos'
 import { displayProviderIcon, displayProviderName } from './display-identity'
-import { NEUTRAL_PLACEHOLDER, searchPlaceholder } from './search-placeholder'
+import { searchPlaceholder } from './search-placeholder'
+import { format, pickerZh, type PickerKey, type Translate } from './locales'
 import type { CatalogGroupSnapshot } from './model-catalog'
 import { useProviderSort } from './use-provider-sort'
 
-const STAR_FAVORITES_LABEL = '收藏夹'
-const FAVORITES_EMPTY_TEXT = '暂无收藏；点击模型行右侧的星标即可收藏。'
-const NO_MATCH_TEXT = '没有匹配的模型。'
-const LOADING_TEXT = '正在加载模型目录…'
-const LOAD_FAILED_TEXT = '模型目录加载失败，请稍后重试。'
-const EMPTY_GROUP_TEXT = '该提供方暂未公布模型。'
-const EMPTY_CATALOG_TEXT = '暂无可用模型，请检查提供方配置。'
+/** 未注入语言服务时的兜底（测试或无 locale 的宿主）。 */
+const fallbackTranslate: Translate<PickerKey> = (key, params) => format(pickerZh[key], params)
 
 function StarIcon(props: { filled: boolean }): React.ReactNode {
   // lucide star（24 viewBox）：统一保留 2px 描边边界，避免实心填充消除描边外扩导致视觉缩小（10%跳变）
@@ -66,6 +62,8 @@ let rememberedFavView = false
 let rememberedProviderId = ''
 
 export function ModelPickerPanel(props: {
+  /** 面板文案的语言读取器；缺省用中文兜底。 */
+  t?: Translate<PickerKey>
   /** 目录加载状态（loading/error 显示占位行） */
   catalogStatus: 'idle' | 'loading' | 'ready' | 'error'
   providers: ReadonlyArray<CatalogGroupSnapshot>
@@ -87,6 +85,7 @@ export function ModelPickerPanel(props: {
   const searchRef = React.useRef<HTMLInputElement | null>(null)
   React.useLayoutEffect(() => { searchRef.current?.focus({ preventScroll: true }) }, [])
 
+  const t = props.t ?? fallbackTranslate
   const onPanelKeyDown = (event: React.KeyboardEvent): void => {
     if (event.key === 'Escape') {
       event.preventDefault()
@@ -346,13 +345,13 @@ export function ModelPickerPanel(props: {
     return normalized === '' ? sourceRows : sourceRows.filter(row =>
       matches(row.modelName) || matches(row.modelId) || (favView && matches(row.providerName)))
   }, [sourceRows, normalized, favView])
-  const emptyText = catalogStatus === 'loading' ? LOADING_TEXT
-    : catalogStatus === 'error' ? LOAD_FAILED_TEXT
-    : normalized !== '' ? NO_MATCH_TEXT
-    : favView ? FAVORITES_EMPTY_TEXT
-    : activeProvider ? EMPTY_GROUP_TEXT : EMPTY_CATALOG_TEXT
+  const emptyText = catalogStatus === 'loading' ? t('loadingCatalog')
+    : catalogStatus === 'error' ? t('loadFailed')
+    : normalized !== '' ? t('emptyNoMatch')
+    : favView ? t('emptyFavorites')
+    : activeProvider ? t('emptyProvider') : t('emptyCatalog')
   // 占位文字随所在视图变化：收藏视图跨供应商，不写名字；供应商视图写显示名。
-  const placeholder = searchPlaceholder(favView, activeProvider ? displayProviderName(activeProvider) : undefined)
+  const placeholder = searchPlaceholder(favView, activeProvider ? displayProviderName(activeProvider) : undefined, t)
 
   const pick = (providerId: string, modelId: string): void => {
     const isCurrent = current?.provider === providerId && current?.model === modelId
@@ -368,16 +367,16 @@ export function ModelPickerPanel(props: {
   }
 
   return (
-    <MenuSurface ref={panelRef} className="dsh003-picker-panel" role="dialog" aria-label="选择模型" style={props.containerStyle} onKeyDown={onPanelKeyDown}>
+    <MenuSurface ref={panelRef} className="dsh003-picker-panel" role="dialog" aria-label={t('dialogLabel')} style={props.containerStyle} onKeyDown={onPanelKeyDown}>
       <div className="dsh003-picker-body">
-        <div className="dsh003-picker-prov-col" role="tablist" aria-label="提供方">
+        <div className="dsh003-picker-prov-col" role="tablist" aria-label={t('providerRailLabel')}>
           <div className="dsh003-picker-prov-head">
             <button
               type="button"
               className="dsh003-picker-prov dsh003-picker-prov-fav"
               data-active={favView ? 'true' : 'false'}
-              aria-label={STAR_FAVORITES_LABEL}
-              title={STAR_FAVORITES_LABEL}
+              aria-label={t('favoritesLabel')}
+              title={t('favoritesLabel')}
               onClick={() => {
                 rememberedFavView = !favView
                 setFavView(!favView)
@@ -399,7 +398,7 @@ export function ModelPickerPanel(props: {
                 style={providerSort.drag?.id === provider.id ? { transform: `translateY(${providerSort.drag.offset}px)` } : undefined}
                 data-active={!favView && provider.id === activeProvider?.id ? 'true' : 'false'}
                 aria-label={displayProviderName(provider)}
-                title={`${displayProviderName(provider)} · 长按拖动排序（Alt + ↑/↓）`}
+                title={format(t('providerReorderHint'), { name: displayProviderName(provider) })}
                 onPointerDown={event => providerSort.begin(event, provider.id)}
                 onClickCapture={providerSort.suppressClick}
                 onKeyDown={event => providerSort.keyboardMove(event, provider.id)}
@@ -426,7 +425,7 @@ export function ModelPickerPanel(props: {
                 type="text"
                 className="dsh003-picker-search"
                 placeholder={placeholder}
-                aria-label={NEUTRAL_PLACEHOLDER}
+                aria-label={t('searchNeutral')}
                 title={placeholder}
                 value={query}
                 onChange={e => setQuery(e.target.value)}
@@ -462,7 +461,7 @@ export function ModelPickerPanel(props: {
                     tabIndex={0}
                     className="dsh003-picker-row-star"
                     data-fav={favorites.has(key) ? 'true' : 'false'}
-                    aria-label={favorites.has(key) ? '取消收藏' : '收藏'}
+                    aria-label={favorites.has(key) ? t('favoriteRemove') : t('favoriteAdd')}
                     onClick={e => toggleStar(e, row.providerId, row.modelId)}
                     onKeyDown={e => {
                       if (e.key === 'Enter' || e.key === ' ') {
@@ -484,13 +483,13 @@ export function ModelPickerPanel(props: {
           </div>
         </div>
       </div>
-      {props.partial && <p className="dsh003-picker-notice" role="status">部分提供方的模型未能加载，请检查提供方配置。</p>}
+      {props.partial && <p className="dsh003-picker-notice" role="status">{t('partialProviders')}</p>}
       {props.error && <p className="dsh003-picker-empty" role="alert">{props.error}</p>}
       <div className={`dsh003-picker-foot ${hasEfforts ? '' : 'dsh003-picker-foot-disabled'}`}>
         {hasEfforts ? (
           <div className="dsh003-picker-foot-inner">
             <div className="dsh003-picker-foot-info">
-              <span className="dsh003-picker-effort-sub">推理等级</span>
+              <span className="dsh003-picker-effort-sub">{t('effortLabel')}</span>
               <span className="dsh003-picker-effort-val">{displayedEffortName}</span>
             </div>
             <div
@@ -501,7 +500,7 @@ export function ModelPickerPanel(props: {
                 className="dsh003-picker-range"
                 role="slider"
                 tabIndex={0}
-                aria-label="推理等级"
+                aria-label={t('effortLabel')}
                 aria-orientation="horizontal"
                 aria-valuemin={0}
                 aria-valuemax={effortCount - 1}
@@ -548,8 +547,8 @@ export function ModelPickerPanel(props: {
           </div>
         ) : (
           <div className="dsh003-picker-slider-empty">
-            <span className="dsh003-picker-effort-sub">推理等级</span>
-            <span className="dsh003-picker-effort-none">当前模型不支持调节</span>
+            <span className="dsh003-picker-effort-sub">{t('effortLabel')}</span>
+            <span className="dsh003-picker-effort-none">{t('effortUnsupported')}</span>
           </div>
         )}
       </div>

@@ -6,6 +6,7 @@ import { runInNewContext } from 'node:vm'
 import { JSDOM } from 'jsdom'
 import { pickerPosition } from '../src/client/picker-position.ts'
 import { apply as applyHost } from '../lib/index.js'
+import { pickerEn, pickerZh, settingsEn, settingsZh } from '../src/client/locales.ts'
 
 const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://picker.test' })
 const win = dom.window
@@ -47,8 +48,8 @@ runInNewContext(readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8
 const plugin = descriptor.factory(name => name === '@deepseek-ai/dsh-client-ui-primitives'
   ? {
     SettingsFormModel,
-    SettingsForm: ({ children, onSave, state }) => React.createElement('form', { onSubmit: event => { event.preventDefault(); onSave() } }, children,
-      React.createElement('button', { type: 'submit', disabled: !state.dirty || state.invalid || state.saving }, '保存')),
+    SettingsForm: ({ children, labels, onSave, state }) => React.createElement('form', { onSubmit: event => { event.preventDefault(); onSave() } }, children,
+      React.createElement('button', { type: 'submit', disabled: !state.dirty || state.invalid || state.saving }, labels.save)),
     SettingsValueField: ({ id, label, text, invalid, placeholder, onEdit }) => React.createElement(React.Fragment, null,
       React.createElement('label', { htmlFor: id }, label),
       React.createElement('input', { id, value: text, placeholder, 'aria-invalid': invalid, onChange: event => onEdit(event.target.value) })),
@@ -99,7 +100,9 @@ test('plugin settings renders its labeled address, saves and clears through the 
   const form = { getSnapshot: () => state, subscribe: () => () => {}, mutate: async (ops, revision) => {
     calls.push({ ops, revision }); state = { ...state, value: { magpieBaseURL: ops[0].value } }; return true
   } }
-  await action(() => root.render(React.createElement(plugin.ModelControlsSettings, { view: 'page', form })))
+  const missing = []
+  const t = key => { if (!(key in settingsZh)) missing.push(key); return settingsZh[key] }
+  await action(() => root.render(React.createElement(plugin.ModelControlsSettings, { view: 'page', form, t })))
   const input = query('#dsh-model-controls-magpie')
   assert.equal(query('label').htmlFor, input.id)
   // The page must use official settings components only: no hand-rolled disclosure box.
@@ -120,6 +123,29 @@ test('plugin settings renders its labeled address, saves and clears through the 
   await action(() => query('form').dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true })))
   assert.equal(calls.length, 2)
   assert.equal(input.getAttribute('aria-invalid'), 'true')
+  assert.deepEqual(missing, [], 'the page must only ask for keys the dictionary defines')
+  assert.equal(query('button[type="submit"]').textContent, settingsZh.save)
+})
+
+test('the two dictionaries stay in step and the page renders English when the locale is English', async () => {
+  for (const [label, a, b] of [['settings', settingsEn, settingsZh], ['picker', pickerEn, pickerZh]]) {
+    assert.deepEqual(Object.keys(a).sort(), Object.keys(b).sort(), `${label}: both dictionaries must define the same keys`)
+  }
+  for (const [key, value] of [...Object.entries(settingsEn), ...Object.entries(settingsZh), ...Object.entries(pickerEn), ...Object.entries(pickerZh)]) {
+    assert.ok(typeof value === 'string' && value.trim() !== '', `empty copy for ${key}`)
+  }
+  // 英文界面下渲染同一张卡片：文案应全部来自 en
+  let state = { status: 'ready', writable: true, revision: 1, base: {}, user: {}, value: { magpieBaseURL: '' } }
+  const form = { getSnapshot: () => state, subscribe: () => () => {}, mutate: async () => true }
+  const asked = []
+  const t = key => { asked.push(key); return settingsEn[key] }
+  await action(() => root.render(React.createElement(plugin.ModelControlsSettings, { view: 'page', form, t })))
+  const input = query('#dsh-model-controls-magpie')
+  assert.equal(input.getAttribute('placeholder'), settingsEn.addressPlaceholder)
+  assert.equal(query('label').textContent, settingsEn.addressLabel)
+  assert.equal(query('button[type="submit"]').textContent, settingsEn.save)
+  assert.ok(asked.every(key => key in settingsEn), 'every requested key must exist in the English dictionary')
+  assert.ok(!/搜索|保存|备用/.test(win.document.body.textContent), 'no Chinese copy may leak into the English page')
 })
 
 test('pointercancel restores the confirmed effort and sends no selection', async () => {
@@ -660,4 +686,32 @@ test('the search box shows the provider name and keeps a stable accessible name'
   await action(() => query('[data-provider-id="q"]').click())
   assert.equal(input.getAttribute('placeholder'), '搜索 OpenCode Go 模型…')
   assert.equal(input.getAttribute('aria-label'), '搜索模型…')
+})
+
+test('the picker renders in English with no Chinese copy left behind', async () => {
+  const t = (key, params) => {
+    const template = pickerEn[key]
+    assert.ok(template !== undefined, `missing English key: ${key}`)
+    if (params === undefined) return template
+    return template.replace(/\{(\w+)\}/g, (whole, name) => name in params ? String(params[name]) : whole)
+  }
+  const f = fixture()
+  f.publish({
+    current: { provider: 'open-code-go', model: 'a', reasoningEffort: 'high' },
+    groups: [{ id: 'open-code-go', name: 'OpenCode Go', models: [{ id: 'a', name: 'Model A',
+      reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'high' } }] }],
+  })
+  await action(() => root.render(React.createElement(plugin.ModelPickerButton, { directory: f.directory, t })))
+  const trigger = query('.dsh003-picker-btn')
+  assert.equal(trigger.getAttribute('aria-label'), 'Choose a model, currently Model A, reasoning effort High')
+  await open()
+  const input = query('.dsh003-picker-search')
+  assert.equal(input.getAttribute('placeholder'), 'Search OpenCode Go models…')
+  assert.equal(input.getAttribute('aria-label'), 'Search models…')
+  assert.equal(query('[role="dialog"]').getAttribute('aria-label'), 'Choose a model')
+  assert.equal(query('[role="tablist"]').getAttribute('aria-label'), 'Providers')
+  assert.equal(query('.dsh003-picker-row-star').getAttribute('aria-label'), 'Add to favourites')
+  assert.equal(query('.dsh003-picker-effort-sub').textContent, 'Reasoning effort')
+  assert.ok(!/[\u4e00-\u9fa5]/.test(win.document.body.textContent), 'no Chinese copy may remain in the English picker')
+  assert.ok(!/[\u4e00-\u9fa5]/.test(trigger.getAttribute('aria-label')), 'the trigger label must be English too')
 })

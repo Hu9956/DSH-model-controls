@@ -2,6 +2,7 @@
 import * as React from 'react'
 
 import type { ModelDirectoryFace } from './model-catalog'
+import type { PickerKey, Translate } from './locales'
 
 import { ModelPickerButton } from './ModelPickerButton'
 
@@ -12,6 +13,8 @@ export interface ModelControlsEntryProps {
   locked: boolean
   /** 本会话是否支持模型检视与选择（官方 available 语义：非寻址 subagent 会话）。 */
   available: boolean
+  /** 选择器文案的语言读取器，由本插件的注册注入；缺省时组件内中文兜底。 */
+  t?: Translate<PickerKey>
 }
 
 /**
@@ -19,11 +22,11 @@ export interface ModelControlsEntryProps {
  * @param props - locked/available，见 ModelControlsEntryProps。
  * @returns 容器（含统一模型+思考强度触发按钮）；available=false 时不渲染。
  */
-export function ModelControlsEntry({ locked, available, directory }: ModelControlsEntryProps): React.ReactNode {
+export function ModelControlsEntry({ locked, available, directory, t }: ModelControlsEntryProps): React.ReactNode {
   if (!available) return null
   return (
     <div className="dsh003-model-controls">
-      <ModelPickerButton locked={locked} directory={directory} />
+      <ModelPickerButton locked={locked} directory={directory} t={t} />
     </div>
   )
 }

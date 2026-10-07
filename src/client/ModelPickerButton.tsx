@@ -9,17 +9,22 @@ import { pickerPosition } from './picker-position'
 import { ProviderLogo } from './provider-logos'
 import { displayProviderIcon } from './display-identity'
 import { createCatalogAdapter, type ModelDirectoryFace } from './model-catalog'
+import { format, pickerZh, type PickerKey, type Translate } from './locales'
 
-const FALLBACK_LABEL = '模型'
+/** 未注入语言服务时的兜底（测试或无 locale 的宿主）。 */
+const fallbackTranslate: Translate<PickerKey> = (key, params) => format(pickerZh[key], params)
+
 
 /** 组件 props：M-049 起 locked 由座位 owner share 透传（原生 disabled 对齐官方触发器）。 */
 export interface ModelPickerButtonProps {
   /** composer 锁定态（M-049 座位接线；缺省 false 兼容独立使用）。 */
   directory: ModelDirectoryFace
   locked?: boolean
+  /** 选择器文案的语言读取器；缺省用中文兜底。 */
+  t?: Translate<PickerKey>
 }
 
-export function ModelPickerButton({ locked = false, directory }: ModelPickerButtonProps): React.ReactNode {
+export function ModelPickerButton({ locked = false, directory, t = fallbackTranslate }: ModelPickerButtonProps): React.ReactNode {
   const interactionLocked = React.useRef(locked)
   interactionLocked.current = locked
   const adapter = React.useMemo(() => createCatalogAdapter(directory), [directory])
@@ -37,7 +42,7 @@ export function ModelPickerButton({ locked = false, directory }: ModelPickerButt
     setSelectionError(null)
     void adapter.select(provider, model, effort).then(ok => {
       if (request !== selectionRequest.current) return
-      setSelectionError(ok ? null : '模型或档位切换失败，请重试。')
+      setSelectionError(ok ? null : t('switchFailed'))
     })
   }
   const [open, setOpen] = React.useState(false)
@@ -127,8 +132,8 @@ export function ModelPickerButton({ locked = false, directory }: ModelPickerButt
   }, [catalog, currentModel])
 
   const triggerLabel = currentEffortName !== null
-    ? `${currentModelName ?? FALLBACK_LABEL} · ${currentEffortName}`
-    : (currentModelName ?? FALLBACK_LABEL)
+    ? `${currentModelName ?? t('modelFallback')} · ${currentEffortName}`
+    : (currentModelName ?? t('modelFallback'))
 
   const pick = (providerId: string, modelId: string): void => {
     // no-op 语义：重复提交会把思考强度重置为模型默认（上游 route 变更清 effort 语义的同源风险）
@@ -151,8 +156,8 @@ export function ModelPickerButton({ locked = false, directory }: ModelPickerButt
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={currentEffortName === null
-          ? `选择模型，当前 ${currentModelName ?? FALLBACK_LABEL}`
-          : `选择模型，当前 ${currentModelName ?? FALLBACK_LABEL}，推理等级 ${currentEffortName}`}
+          ? format(t('triggerAria'), { model: currentModelName ?? t('modelFallback') })
+          : format(t('triggerAriaEffort'), { model: currentModelName ?? t('modelFallback'), effort: currentEffortName })}
         title={triggerLabel}
         disabled={locked}
         onClick={toggle}
@@ -160,7 +165,7 @@ export function ModelPickerButton({ locked = false, directory }: ModelPickerButt
         {currentGroup !== undefined && (
           <ProviderLogo {...displayProviderIcon(currentGroup)} small />
         )}
-        <span className="dsh003-picker-btn-label">{currentModelName ?? FALLBACK_LABEL}</span>
+        <span className="dsh003-picker-btn-label">{currentModelName ?? t('modelFallback')}</span>
         {currentEffortName !== null && (
           <span className="dsh003-picker-btn-effort">{currentEffortName}</span>
         )}
@@ -168,6 +173,7 @@ export function ModelPickerButton({ locked = false, directory }: ModelPickerButt
       </button>
       {open && !locked && pos !== null && createPortal(
         <ModelPickerPanel
+          t={t}
           pending={catalog.pending}
           error={selectionError ?? catalog.error}
           catalogStatus={catalog.status}

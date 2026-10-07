@@ -1,23 +1,20 @@
 /**
  * The search box's placeholder: name the provider being browsed without ever
  * dropping the name silently — a provider whose name vanished would read as a
- * broken box, not as a shorter one.
+ * broken box, not as a shorter one. Text is measured in half-width units so the
+ * same rule holds in any language.
  */
 
-/** Neutral copy, also the input's fixed accessible name. */
-export const NEUTRAL_PLACEHOLDER = '搜索模型…'
+import { format, pickerZh, type PickerKey, type Translate } from './locales'
 
-/** Cross-provider view: naming one provider here would misstate the scope. */
-const FAVORITES_PLACEHOLDER = '搜索收藏模型…'
+/** The input's text area: 204px at 12px, where one Latin glyph ≈ 1 unit and one CJK ≈ 2. */
+const TEXT_UNITS = 30
 
-/**
- * Name budget in half-width units (one Latin character ≈ 1, one CJK ≈ 2),
- * measured from the panel: 320px panel − 52px provider rail − 16px row padding
- * − 48px input padding = 204px of text at 12px, minus the fixed words around
- * the name, with a unit of slack. The trailing `…` costs one unit.
- */
-const NAME_UNITS_WITH_SUFFIX = 21
-const NAME_UNITS_WITHOUT_SUFFIX = 24
+/** Fallback used when no locale service is bound (tests, or a host without one). */
+const fallback: Translate<PickerKey> = (key, params) => format(pickerZh[key], params)
+
+/** Neutral copy, also the input's accessible name. */
+export const NEUTRAL_PLACEHOLDER = pickerZh.searchNeutral
 
 /** Display width of one code point, in half-width units. */
 function unitsOf(codePoint: number): number {
@@ -31,32 +28,38 @@ function widthOf(text: string): number {
   return total
 }
 
-/** Keep the leading code points that fit the budget, marking the cut. */
-function clip(text: string, budget: number): string {
-  let kept = ''
-  let used = 0
-  for (const character of text) {
-    const units = unitsOf(character.codePointAt(0) ?? 0)
-    if (used + units > budget) break
-    kept += character
-    used += units
+/** Longest prefix of the name whose rendered line still fits, or '' when none does. */
+function clipToFit(name: string, render: (candidate: string) => string): string {
+  const characters = [...name]
+  let best = ''
+  for (let end = 1; end <= characters.length; end += 1) {
+    const candidate = render(characters.slice(0, end).join(''))
+    if (widthOf(candidate) > TEXT_UNITS) break
+    best = candidate
   }
-  return `${kept.trimEnd()}…`
+  return best
 }
 
 /**
  * Build the search box's placeholder for the current view.
  * @param favorites - whether the cross-provider favourites view is showing.
  * @param providerName - the browsed provider's display name, when one is active.
+ * @param t - the picker's locale reader.
  * @returns the placeholder; the provider name is always present when there is one.
  */
-export function searchPlaceholder(favorites: boolean, providerName: string | undefined): string {
-  if (favorites) return FAVORITES_PLACEHOLDER
+export function searchPlaceholder(
+  favorites: boolean,
+  providerName: string | undefined,
+  t: Translate<PickerKey> = fallback,
+): string {
+  if (favorites) return t('searchFavorites')
   const name = providerName?.trim() ?? ''
-  if (name === '') return NEUTRAL_PLACEHOLDER
-  const width = widthOf(name)
-  if (width <= NAME_UNITS_WITH_SUFFIX) return `搜索 ${name} 模型…`
-  if (width <= NAME_UNITS_WITHOUT_SUFFIX) return `搜索 ${name}…`
-  // Leave one unit for the ellipsis itself.
-  return `搜索 ${clip(name, NAME_UNITS_WITHOUT_SUFFIX - 1)}`
+  if (name === '') return t('searchNeutral')
+  const full = format(t('searchProvider'), { name })
+  if (widthOf(full) <= TEXT_UNITS) return full
+  // Dropping the trailing noun buys the name more room; only then shorten the name.
+  const short = format(t('searchProviderShort'), { name })
+  if (widthOf(short) <= TEXT_UNITS) return short
+  const clipped = clipToFit(name, candidate => format(t('searchProviderShort'), { name: candidate }))
+  return clipped === '' ? t('searchNeutral') : clipped
 }
