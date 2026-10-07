@@ -12,11 +12,11 @@ import { MenuSurface } from '@deepseek-ai/dsh-client-ui-primitives'
 import { favoriteKeyOf, getFavoriteSet, subscribeFavorites, toggleFavorite } from './picker-data'
 import { ProviderLogo } from './provider-logos'
 import { displayProviderIcon, displayProviderName } from './display-identity'
+import { NEUTRAL_PLACEHOLDER, searchPlaceholder } from './search-placeholder'
 import type { CatalogGroupSnapshot } from './model-catalog'
 import { useProviderSort } from './use-provider-sort'
 
 const STAR_FAVORITES_LABEL = '收藏夹'
-const SEARCH_PLACEHOLDER = '搜索模型…'
 const FAVORITES_EMPTY_TEXT = '暂无收藏；点击模型行右侧的星标即可收藏。'
 const NO_MATCH_TEXT = '没有匹配的模型。'
 const LOADING_TEXT = '正在加载模型目录…'
@@ -351,6 +351,8 @@ export function ModelPickerPanel(props: {
     : normalized !== '' ? NO_MATCH_TEXT
     : favView ? FAVORITES_EMPTY_TEXT
     : activeProvider ? EMPTY_GROUP_TEXT : EMPTY_CATALOG_TEXT
+  // 占位文字随所在视图变化：收藏视图跨供应商，不写名字；供应商视图写显示名。
+  const placeholder = searchPlaceholder(favView, activeProvider ? displayProviderName(activeProvider) : undefined)
 
   const pick = (providerId: string, modelId: string): void => {
     const isCurrent = current?.provider === providerId && current?.model === modelId
@@ -423,8 +425,9 @@ export function ModelPickerPanel(props: {
                 ref={searchRef}
                 type="text"
                 className="dsh003-picker-search"
-                placeholder={SEARCH_PLACEHOLDER}
-                aria-label={SEARCH_PLACEHOLDER}
+                placeholder={placeholder}
+                aria-label={NEUTRAL_PLACEHOLDER}
+                title={placeholder}
                 value={query}
                 onChange={e => setQuery(e.target.value)}
               />

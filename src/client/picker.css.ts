@@ -279,6 +279,11 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
 }
 .dsh003-picker-search-icon {
   position: absolute !important;
+  /* left 10：图标墨迹在 14px 盒内自 ~1.5px 起，落在内容列上，与模型名左缘对齐。
+     与 padding-left 32 配对是为了让**看得见的**左右间距相等（不是盒子上的数字相等）：
+     左侧 = 10 + 1.5 = 11.5；右侧 = 32 + 文字自留白 1.5 − (10 + 图标墨迹右缘 12) = 11.5。
+     两个 1.5 都是应用内逐像素实测值（2026-10-07），换字体需重新量。
+     不变量见 tests/search-icon-spacing.test.mjs。 */
   left: 10px !important;
   display: inline-flex !important;
   color: var(--dsw-alias-label-secondary) !important;
@@ -289,7 +294,9 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   width: 100% !important;
   min-width: 0 !important;
   height: 36px !important;
-  padding: 0 12px 0 36px !important;
+  /* 左内边距 32：为图标留位并让两侧"看得见的"间距相等——图标墨迹不占满 14px 盒，
+     文字本身也带留白，所以盒子上的数字并不对称（左 10 / 右 8）。换算见 icon 规则注释。 */
+  padding: 0 12px 0 32px !important;
   border: 1px solid transparent !important;
   border-radius: var(--dshT3-radius-md, 8px) !important;
   background: var(--dsw-alias-interactive-bg-hover) !important;

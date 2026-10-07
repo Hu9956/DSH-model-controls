@@ -617,3 +617,47 @@ test('holding a supplier at the viewport edge scrolls to destinations outside th
   assert.deepEqual(supplierIds(), [ids[1], ids[2], ids[3], ids[0], ids[4], ids[5]])
   assert.equal(f.calls.length, 0)
 })
+
+test('search placeholder names the browsed provider, never dropping it', () => {
+  const { searchPlaceholder, NEUTRAL_PLACEHOLDER } = require('../src/client/search-placeholder.ts')
+  // 供应商视图：写显示名
+  assert.equal(searchPlaceholder(false, 'Magpie'), '搜索 Magpie 模型…')
+  assert.equal(searchPlaceholder(false, 'OpenCode Go'), '搜索 OpenCode Go 模型…')
+  assert.equal(searchPlaceholder(false, '灵算'), '搜索 灵算 模型…')
+  // 收藏视图跨供应商，不写名字
+  assert.equal(searchPlaceholder(true, 'Magpie'), '搜索收藏模型…')
+  // 取不到名字才退回中性，此时无供应商可写
+  assert.equal(searchPlaceholder(false, undefined), NEUTRAL_PLACEHOLDER)
+  assert.equal(searchPlaceholder(false, '   '), NEUTRAL_PLACEHOLDER)
+})
+
+test('a long provider name shortens the wording first, then clips, and keeps its head', () => {
+  const { searchPlaceholder } = require('../src/client/search-placeholder.ts')
+  // 「Qwen Token Plan CN」18 单位，仍在第一级：完整显示
+  assert.equal(searchPlaceholder(false, 'Qwen Token Plan CN'), '搜索 Qwen Token Plan CN 模型…')
+  // 去掉「模型」两字腾出空间：名字仍完整
+  assert.equal(searchPlaceholder(false, 'OpenCode Go Enterprise'), '搜索 OpenCode Go Enterprise…')
+  // 仍放不下才截断，且保留名字开头（不出现只有「搜索…」的空壳）
+  const clipped = searchPlaceholder(false, 'Qwen Token Plan CN Enterprise Edition')
+  assert.ok(clipped.startsWith('搜索 Qwen Token Plan'), clipped)
+  assert.ok(clipped.endsWith('…'), clipped)
+  assert.ok(!clipped.includes(' 模型…'), clipped)
+  // 中文名按双宽计算，不会因为字少就被误判为放得下
+  assert.ok(searchPlaceholder(false, '这是一个非常非常长的中文供应商名称示例').length < 24)
+})
+
+test('the search box shows the provider name and keeps a stable accessible name', async () => {
+  const f = fixture()
+  f.publish({ groups: [
+    { id: 'p', name: 'Magpie', models: [{ id: 'a', name: 'Model A' }] },
+    { id: 'q', name: 'OpenCode Go', models: [{ id: 'b', name: 'Model B' }] },
+  ] })
+  await render(f.directory); await open()
+  const input = query('.dsh003-picker-search')
+  assert.equal(input.getAttribute('placeholder'), '搜索 Magpie 模型…')
+  assert.equal(input.getAttribute('title'), '搜索 Magpie 模型…')
+  assert.equal(input.getAttribute('aria-label'), '搜索模型…')
+  await action(() => query('[data-provider-id="q"]').click())
+  assert.equal(input.getAttribute('placeholder'), '搜索 OpenCode Go 模型…')
+  assert.equal(input.getAttribute('aria-label'), '搜索模型…')
+})
