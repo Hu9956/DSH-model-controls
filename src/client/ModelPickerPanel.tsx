@@ -7,7 +7,7 @@
  * 收藏视图：右栏跨提供方汇总收藏的模型，行两行制（模型名 + 供应商名副行，M-054，行高 36px 不变）。搜索：模型 id/名称（收藏视图含提供方名）子串过滤。
  */
 import * as React from 'react'
-import { MenuSurface } from '@deepseek-ai/dsh-client-ui-primitives'
+import { MenuSurface, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 
 import { favoriteKeyOf, getFavoriteSet, subscribeFavorites, toggleFavorite } from './picker-data'
 import { ProviderLogo } from './provider-logos'
@@ -54,6 +54,33 @@ interface PickerRow {
   providerName: string
   modelId: string
   modelName: string
+}
+
+/** 模型名单元：被省略号截断时，悬停显示完整名。
+ * 原生 title 在本应用不可靠——行悬停会展开右侧星标、挤窄文本，这次布局重排会不断重置
+ * 原生提示的计时器，实测悬停不出来；宿主 Tooltip 由 JS 驱动，不受重排影响。
+ * 是否截断在指针进入时按当时布局实测（此刻星标已展开，量到的正是悬停态可用宽度），
+ * 未截断则抑制气泡；离开时复位，使下一次进入重新判定。 */
+function ModelName(props: { name: string }): React.ReactNode {
+  const ref = React.useRef<HTMLSpanElement | null>(null)
+  const [fits, setFits] = React.useState(false)
+  const measure = (): void => {
+    const el = ref.current
+    if (el === null) return
+    setFits(el.scrollWidth <= el.clientWidth)
+  }
+  return (
+    <Tooltip label={props.name} side="top" align="end" delayMs={150} portal disabled={fits}>
+      <span
+        ref={ref}
+        className="dsh003-picker-model-name"
+        onMouseEnter={measure}
+        onMouseLeave={() => setFits(false)}
+      >
+        {props.name}
+      </span>
+    </Tooltip>
+  )
 }
 
 // 会话内视图记忆：面板关闭即卸载，用模块级变量把「收藏夹视图开关 / 选中的提供方」带到
@@ -120,7 +147,7 @@ export function ModelPickerPanel(props: {
     return providerSort.sorted[0]?.id ?? ''
   }, [current?.provider, providers, providerSort.sorted])
 
-  const [favView, setFavView] = React.useState(false)
+  const [favView, setFavView] = React.useState(rememberedFavView)
   const [query, setQuery] = React.useState('')
   const [activeProviderId, setActiveProviderId] = React.useState<string>(initialProviderId)
 
@@ -445,16 +472,15 @@ export function ModelPickerPanel(props: {
                   className="dsh003-picker-model-row"
                   data-active={active ? 'true' : 'false'}
                   data-sub={favView ? 'true' : 'false'}
-                  title={row.modelName}
                   onClick={() => pick(row.providerId, row.modelId)}
                 >
                   {favView ? (
                     <span className="dsh003-picker-model-text">
-                      <span className="dsh003-picker-model-name">{row.modelName}</span>
+                      <ModelName name={row.modelName} />
                       <span className="dsh003-picker-model-sub">{row.providerName}</span>
                     </span>
                   ) : (
-                    <span className="dsh003-picker-model-name">{row.modelName}</span>
+                    <ModelName name={row.modelName} />
                   )}
                   <span
                     role="button"

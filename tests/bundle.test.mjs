@@ -13,7 +13,7 @@ test('built client executes with host modules and registers its session slot wit
   assert.equal(descriptor.id, '@kewen/dsh-model-controls')
   const exports = descriptor.factory(name => {
     if (name === '@deepseek-ai/dsh-client-ui-primitives') {
-      return { MenuSurface: () => null, IconChevronDownOutlineRegular: () => null }
+      return { MenuSurface: () => null, IconChevronDownOutlineRegular: () => null, Tooltip: () => null }
     }
     assert.ok(['react', 'react-dom', 'react/jsx-runtime'].includes(name), `unexpected host dependency: ${name}`)
     return require(name)

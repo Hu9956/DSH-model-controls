@@ -181,10 +181,17 @@ export function resolveProviderLogo(providerId: string | null | undefined): stri
   return null
 }
 
+/** Magpie 网关按 API 协议拆成多个路由 id（magpie / magpie-responses / magpie-anthropic）：
+ * 同一个网关的入口，图标与显示身份应统一，不能只认恰好等于 magpie 的那一个。 */
+function isMagpieRoute(providerId: string): boolean {
+  const id = providerId.trim().toLowerCase()
+  return id === 'magpie' || id.startsWith('magpie-')
+}
+
 /** 左栏/触发按钮提供方 logo：命中渲染内联 SVG（aria-hidden，色彩继承文本色），未命中回退首字母文本。
  * M-056：small=true 为触发按钮 14px 小档，logo 与首字母回退同用 `.dsh003-provider-logo--sm` 盒。 */
 export function ProviderLogo(props: { providerId: string; name: string; small?: boolean }): React.ReactNode {
-  if (props.providerId === 'magpie') {
+  if (isMagpieRoute(props.providerId)) {
     const cls = props.small === true ? 'dsh003-provider-logo dsh003-provider-logo--sm' : 'dsh003-provider-logo'
     return <span className={cls} aria-hidden="true" dangerouslySetInnerHTML={{ __html: magpieSvg }} />
   }

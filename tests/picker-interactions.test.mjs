@@ -54,6 +54,11 @@ const plugin = descriptor.factory(name => name === '@deepseek-ai/dsh-client-ui-p
       React.createElement('label', { htmlFor: id }, label),
       React.createElement('input', { id, value: text, placeholder, 'aria-invalid': invalid, onChange: event => onEdit(event.target.value) })),
     MenuSurface: React.forwardRef((props, ref) => React.createElement('div', { ...props, ref })), IconChevronDownOutlineRegular: () => null,
+    // Host tooltip stand-in: keeps the anchor's own handlers and exposes what it would show.
+    Tooltip: ({ label, disabled, children }) => React.cloneElement(children, {
+      'data-tooltip-label': disabled === true ? undefined : label,
+      'data-tooltip-disabled': disabled === true ? 'true' : 'false',
+    }),
   }
   : require(name))
 let root
@@ -382,6 +387,8 @@ test('empty supplier, catalog, favorites, loading and failure each show one matc
   assert.equal(message(), '正在加载模型目录…')
   await action(() => f.publish({ status: 'error' }))
   assert.equal(message(), '模型目录加载失败，请稍后重试。')
+  // Restore the shared view for subsequent interaction scenarios.
+  await action(() => query('.dsh003-picker-prov-fav').click())
 })
 
 test('a search with no results shows only the search empty message', async () => {
@@ -459,7 +466,7 @@ test('removing Magpie routing restores button, supplier and existing favorite id
   await render(f.directory); await open()
   assert.equal(query('[data-provider-id="deepseek-official"]').getAttribute('aria-label'), 'DeepSeek')
   assert.notEqual(query('.dsh003-picker-btn svg')?.getAttribute('viewBox'), '0 5 44 34')
-  await action(() => query('.dsh003-picker-prov-fav').click())
+  // Reopening returns to the favorites view, where the restored identity applies as well.
   assert.equal(query('.dsh003-picker-model-sub').textContent, 'DeepSeek')
   assert.equal(win.localStorage.getItem('dsh003.model-picker.favorites'), stored)
   assert.equal(f.calls.length, 0)
@@ -475,6 +482,75 @@ test('unknown providers still render their initial with the existing small badge
   await render(f.directory)
   const icon = query('.dsh003-picker-btn .dsh003-provider-initial--sm')
   assert.equal(icon?.textContent, '灵')
+})
+
+test('every Magpie protocol route shows the Magpie icon instead of a bare initial', async () => {
+  const f = fixture()
+  // The gateway exposes one route per API protocol; all of them are the same gateway.
+  const groups = [
+    { id: 'magpie', name: 'Magpie', models: [{ id: 'a', name: 'Model a' }] },
+    { id: 'magpie-responses', name: 'Magpie · Responses', models: [{ id: 'b', name: 'Model b' }] },
+    { id: 'magpie-anthropic', name: 'Magpie · Anthropic', models: [{ id: 'c', name: 'Model c' }] },
+  ]
+  f.publish({ current: { provider: 'magpie', model: 'a' }, groups })
+  await render(f.directory); await open()
+  const magpieViewBox = '0 5 44 34'
+  for (const group of groups) {
+    assert.equal(
+      query(`[data-provider-id="${group.id}"] svg`)?.getAttribute('viewBox'), magpieViewBox,
+      `${group.id} must show the Magpie icon`,
+    )
+    assert.equal(query(`[data-provider-id="${group.id}"] .dsh003-provider-initial`), null,
+      `${group.id} must not fall back to a bare initial`)
+  }
+})
+
+/** 模拟真实截断：jsdom 不做布局，用可覆写的 scrollWidth/clientWidth 表达"文本比盒子宽"。 */
+function mockNameOverflow(overflowing) {
+  const originalScroll = Object.getOwnPropertyDescriptor(win.Element.prototype, 'scrollWidth')
+  const originalClient = Object.getOwnPropertyDescriptor(win.Element.prototype, 'clientWidth')
+  Object.defineProperty(win.Element.prototype, 'scrollWidth', {
+    configurable: true,
+    get() { return this.classList?.contains('dsh003-picker-model-name') && overflowing ? 400 : 100 },
+  })
+  Object.defineProperty(win.Element.prototype, 'clientWidth', {
+    configurable: true,
+    get() { return this.classList?.contains('dsh003-picker-model-name') ? 200 : 200 },
+  })
+  return () => {
+    if (originalScroll) Object.defineProperty(win.Element.prototype, 'scrollWidth', originalScroll)
+    if (originalClient) Object.defineProperty(win.Element.prototype, 'clientWidth', originalClient)
+  }
+}
+
+test('a truncated model name offers its full text on hover, and re-measures on each entry', async () => {
+  const f = fixture()
+  const restore = mockNameOverflow(true)
+  try {
+    await render(f.directory); await open()
+    const name = () => rows()[0].querySelector('.dsh003-picker-model-name')
+    // 悬停前处于"待测量"态：气泡未被抑制，真正是否弹出由宿主在测得截断后决定。
+    assert.equal(name().getAttribute('data-tooltip-disabled'), 'false')
+    await action(() => name().dispatchEvent(new win.MouseEvent('mouseover', { bubbles: true })))
+    assert.equal(name().getAttribute('data-tooltip-label'), 'Model a')
+    assert.equal(name().getAttribute('data-tooltip-disabled'), 'false',
+      'a truncated name must keep the bubble enabled')
+    // 离开后复位，下一次进入重新判定
+    await action(() => name().dispatchEvent(new win.MouseEvent('mouseout', { bubbles: true })))
+    assert.equal(name().getAttribute('data-tooltip-disabled'), 'false')
+  } finally { restore() }
+})
+
+test('a name that fits is suppressed once measured', async () => {
+  const f = fixture()
+  const restore = mockNameOverflow(false)
+  try {
+    await render(f.directory); await open()
+    const name = () => rows()[0].querySelector('.dsh003-picker-model-name')
+    await action(() => name().dispatchEvent(new win.MouseEvent('mouseover', { bubbles: true })))
+    assert.equal(name().getAttribute('data-tooltip-disabled'), 'true',
+      'a name that fits must suppress the bubble')
+  } finally { restore() }
 })
 
 test('cached lists still reflect favorite changes and catalog updates under an active search', async () => {
@@ -498,6 +574,30 @@ test('cached lists still reflect favorite changes and catalog updates under an a
   await action(() => f.publish({ groups: [{ ...group, models: [{ id: 'unique', name: 'Renamed model' }] }] }))
   assert.equal(rows().length, 1)
   assert.equal(rows()[0].textContent, 'Renamed model')
+})
+
+test('reopening the panel returns to the favorites view without switching back to the supplier list', async () => {
+  const f = fixture()
+  const groups = [
+    { id: 'deepseek-official', name: 'DeepSeek', models: [{ id: 'step-5', name: 'Step 5' }] },
+    { id: 'magpie', name: 'Magpie', models: [{ id: 'other', name: 'Other' }] },
+  ]
+  f.publish({ current: { provider: 'deepseek-official', model: 'step-5' }, groups })
+  await render(f.directory); await open()
+  assert.equal(query('.dsh003-picker-model-sub'), null, 'the supplier list shows the model name alone')
+  await action(() => rows()[0].querySelector('.dsh003-picker-row-star').click())
+  await action(() => query('.dsh003-picker-prov-fav').click())
+  assert.equal(query('.dsh003-picker-model-sub').textContent, 'DeepSeek')
+  await key(query('.dsh003-picker-search'), 'Escape')
+  await open()
+  assert.equal(query('.dsh003-picker-model-sub').textContent, 'DeepSeek')
+  assert.equal(f.calls.length, 0, 'reopening must not resubmit the current model')
+  assert.equal(query('[data-provider-id="deepseek-official"]').dataset.active, 'false')
+  // 切回供应商视图后重开，应留在供应商视图（记忆双向生效）
+  await action(() => query('[data-provider-id="deepseek-official"]').click())
+  await key(query('.dsh003-picker-search'), 'Escape')
+  await open()
+  assert.equal(query('.dsh003-picker-model-sub'), null)
 })
 
 let supplierFixtureId = 0
@@ -556,7 +656,7 @@ test('long press reorders without switching and persists across reopening and a 
   assert.deepEqual(supplierIds(), expected)
   runInNewContext(readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8'), { document: win.document, Element: win.Element, Node: win.Node, console, window: win })
   const reloaded = descriptor.factory(name => name === '@deepseek-ai/dsh-client-ui-primitives'
-    ? { MenuSurface: React.forwardRef((props, ref) => React.createElement('div', { ...props, ref })), IconChevronDownOutlineRegular: () => null }
+    ? { MenuSurface: React.forwardRef((props, ref) => React.createElement('div', { ...props, ref })), IconChevronDownOutlineRegular: () => null, Tooltip: ({ children }) => children }
     : require(name))
   await action(() => root.render(React.createElement(reloaded.ModelPickerButton, { directory: f.directory })))
   await open()
