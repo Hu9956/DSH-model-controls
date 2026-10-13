@@ -16,6 +16,7 @@
  */
 import * as React from 'react'
 import magpieSvg from './magpie.svg?raw'
+import { isMagpieRoute } from './magpie-display'
 
 /** 首字母兜底：无 logo 的 provider 渲染展示名首个可见字符（自 ModelPickerPanel 迁入）。 */
 function providerInitial(name: string): string {
@@ -179,13 +180,6 @@ export function resolveProviderLogo(providerId: string | null | undefined): stri
   if (id.startsWith('xiaomi')) return PROVIDER_LOGOS.get('xiaomi') ?? null
   if (id.startsWith('zai')) return PROVIDER_LOGOS.get('zai') ?? null
   return null
-}
-
-/** Magpie 网关按 API 协议拆成多个路由 id（magpie / magpie-responses / magpie-anthropic）：
- * 同一个网关的入口，图标与显示身份应统一，不能只认恰好等于 magpie 的那一个。 */
-function isMagpieRoute(providerId: string): boolean {
-  const id = providerId.trim().toLowerCase()
-  return id === 'magpie' || id.startsWith('magpie-')
 }
 
 /** 左栏/触发按钮提供方 logo：命中渲染内联 SVG（aria-hidden，色彩继承文本色），未命中回退首字母文本。

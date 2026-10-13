@@ -505,6 +505,75 @@ test('every Magpie protocol route shows the Magpie icon instead of a bare initia
   }
 })
 
+test('a Magpie model splits into two lines in the supplier view, other suppliers stay one line', async () => {
+  const f = fixture()
+  f.publish({
+    current: { provider: 'magpie', model: 'm1' },
+    groups: [
+      { id: 'magpie', name: 'Magpie', models: [
+        { id: 'm1', name: 'Qwen3.8-Flash · Qoder CN' },
+        { id: 'm2', name: 'Deepseek-V4.1-Flash (SG) · WorkBuddy AI' },
+        { id: 'm3', name: 'no-separator-here' },
+      ] },
+      { id: 'plain', name: 'Plain', models: [{ id: 'p1', name: 'Plain Model' }] },
+    ],
+  })
+  await render(f.directory); await open()
+  // Magpie 供应商视图：两行，主行是模型、副行是「网关 · 路由来源」。
+  assert.equal(rows()[0].dataset.sub, 'true')
+  assert.equal(rows()[0].querySelector('.dsh003-picker-model-name').textContent, 'Qwen3.8-Flash')
+  assert.equal(rows()[0].querySelector('.dsh003-picker-model-sub').textContent, 'Magpie · Qoder CN')
+  assert.equal(rows()[1].querySelector('.dsh003-picker-model-name').textContent, 'Deepseek-V4.1-Flash (SG)')
+  assert.equal(rows()[1].querySelector('.dsh003-picker-model-sub').textContent, 'Magpie · WorkBuddy AI')
+  // 不遵循命名约定：回退单行原名，不臆造副行。
+  assert.equal(rows()[2].dataset.sub, 'false')
+  assert.equal(rows()[2].querySelector('.dsh003-picker-model-sub'), null)
+  assert.equal(rows()[2].querySelector('.dsh003-picker-model-name').textContent, 'no-separator-here')
+  // 非 Magpie 供应商在供应商视图保持单行。
+  await action(() => query('[data-provider-id="plain"]').click())
+  assert.equal(rows()[0].dataset.sub, 'false')
+  assert.equal(rows()[0].querySelector('.dsh003-picker-model-sub'), null)
+  assert.equal(rows()[0].querySelector('.dsh003-picker-model-name').textContent, 'Plain Model')
+  // 搜索仍按上游原名匹配（拆分只影响显示，不影响检索）：路由来源也能搜到。
+  await action(() => query('[data-provider-id="magpie"]').click())
+  const search = query('.dsh003-picker-search')
+  await action(() => {
+    Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set.call(search, 'Qoder')
+    search.dispatchEvent(new win.Event('input', { bubbles: true }))
+  })
+  assert.equal(rows().length, 1, 'the upstream name stays searchable even though the route moved to line two')
+  assert.equal(rows()[0].querySelector('.dsh003-picker-model-name').textContent, 'Qwen3.8-Flash')
+  await action(() => {
+    Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set.call(search, '')
+    search.dispatchEvent(new win.Event('input', { bubbles: true }))
+  })
+})
+
+test('a favourited Magpie model shows the gateway and route in its second line', async () => {
+  const f = fixture()
+  f.publish({
+    current: { provider: 'magpie', model: 'm1' },
+    groups: [{ id: 'magpie', name: 'Magpie', models: [{ id: 'm1', name: 'Qwen3.8-Flash · Qoder CN' }] }],
+  })
+  await render(f.directory); await open()
+  await action(() => rows()[0].querySelector('.dsh003-picker-row-star').click())
+  await action(() => query('.dsh003-picker-prov-fav').click())
+  assert.equal(rows()[0].querySelector('.dsh003-picker-model-name').textContent, 'Qwen3.8-Flash')
+  assert.equal(rows()[0].querySelector('.dsh003-picker-model-sub').textContent, 'Magpie · Qoder CN')
+  // 搜索在收藏视图含提供方名与上游原名。
+  const search = query('.dsh003-picker-search')
+  await action(() => {
+    Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set.call(search, 'Qoder')
+    search.dispatchEvent(new win.Event('input', { bubbles: true }))
+  })
+  assert.equal(rows().length, 1, 'the upstream name stays searchable in the favourites view')
+  await action(() => {
+    Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set.call(search, '')
+    search.dispatchEvent(new win.Event('input', { bubbles: true }))
+  })
+  await action(() => query('.dsh003-picker-prov-fav').click())
+})
+
 /** 模拟真实截断：jsdom 不做布局，用可覆写的 scrollWidth/clientWidth 表达"文本比盒子宽"。 */
 function mockNameOverflow(overflowing) {
   const originalScroll = Object.getOwnPropertyDescriptor(win.Element.prototype, 'scrollWidth')

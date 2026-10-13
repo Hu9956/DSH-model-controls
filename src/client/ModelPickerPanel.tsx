@@ -10,6 +10,7 @@ import * as React from 'react'
 import { MenuSurface, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 
 import { favoriteKeyOf, getFavoriteSet, subscribeFavorites, toggleFavorite } from './picker-data'
+import { isMagpieRoute, magpieGatewayLabel, splitMagpieModelName } from './magpie-display'
 import { ProviderLogo } from './provider-logos'
 import { displayProviderIcon, displayProviderName } from './display-identity'
 import { searchPlaceholder } from './search-placeholder'
@@ -48,12 +49,43 @@ function CheckIcon(): React.ReactNode {
   )
 }
 
-/** 面板行：提供方 + 模型（收藏视图跨提供方汇总用）。 */
+/** 面板行：提供方 + 模型（收藏视图跨提供方汇总用）。
+ * 主行 `primary` 与副行 `sub` 是显示层结果：Magpie 的「模型 · 路由来源」显示名拆成两行，
+ * 副行补上网关标识；`modelName` 保留上游原值，供搜索与提示使用。 */
 interface PickerRow {
   providerId: string
   providerName: string
   modelId: string
   modelName: string
+  primary: string
+  sub: string | null
+}
+
+/** 构造一行显示数据。
+ * Magpie 模型一律两行（模型 / 网关 · 路由来源），与所在视图无关；
+ * 其余供应商只在收藏视图借副行标注来源（跨供应商汇总时需要），供应商视图保持单行紧凑。
+ * @param favView - 当前是否收藏视图。
+ */
+function buildRow(
+  provider: CatalogGroupSnapshot,
+  model: { id: string; name: string },
+  favView: boolean,
+): PickerRow {
+  const providerName = displayProviderName(provider)
+  const split = isMagpieRoute(provider.id) ? splitMagpieModelName(model.name) : null
+  // Magpie 副行写作「网关 · 路由来源」：网关名取自该路由显示名的首段（尊重用户配置的网关名），
+  // 路由来源是模型显示名分隔符之后那段（如 Qoder CN）。拆不出格式时回退单行原名。
+  const sub = split !== null
+    ? `${magpieGatewayLabel(providerName)} \u00b7 ${split.route}`
+    : (favView ? providerName : null)
+  return {
+    providerId: provider.id,
+    providerName,
+    modelId: model.id,
+    modelName: model.name,
+    primary: split?.model ?? model.name,
+    sub,
+  }
 }
 
 /** 模型名单元：被省略号截断时，悬停显示完整名。
@@ -354,7 +386,7 @@ export function ModelPickerPanel(props: {
     for (const provider of providers) {
       for (const model of provider.models) {
         if (favorites.has(favoriteKeyOf(provider.id, model.id))) {
-          rows.push({ providerId: provider.id, providerName: displayProviderName(provider), modelId: model.id, modelName: model.name })
+          rows.push(buildRow(provider, model, true))
         }
       }
     }
@@ -365,7 +397,7 @@ export function ModelPickerPanel(props: {
   const sourceRows = React.useMemo(() => {
     if (favView) return favoriteRows
     if (!activeProvider) return []
-    return activeProvider.models.map(model => ({ providerId: activeProvider.id, providerName: displayProviderName(activeProvider), modelId: model.id, modelName: model.name }))
+    return activeProvider.models.map(model => buildRow(activeProvider, model, false))
   }, [favView, favoriteRows, activeProvider])
   const visibleRows = React.useMemo(() => {
     const matches = (text: string): boolean => text.toLocaleLowerCase().includes(normalized)
@@ -471,16 +503,16 @@ export function ModelPickerPanel(props: {
                   type="button"
                   className="dsh003-picker-model-row"
                   data-active={active ? 'true' : 'false'}
-                  data-sub={favView ? 'true' : 'false'}
+                  data-sub={row.sub !== null ? 'true' : 'false'}
                   onClick={() => pick(row.providerId, row.modelId)}
                 >
-                  {favView ? (
+                  {row.sub !== null ? (
                     <span className="dsh003-picker-model-text">
-                      <ModelName name={row.modelName} />
-                      <span className="dsh003-picker-model-sub">{row.providerName}</span>
+                      <ModelName name={row.primary} />
+                      <span className="dsh003-picker-model-sub">{row.sub}</span>
                     </span>
                   ) : (
-                    <ModelName name={row.modelName} />
+                    <ModelName name={row.primary} />
                   )}
                   <span
                     role="button"
