@@ -90,6 +90,8 @@
     "dsh-plugin",
     "deepseek-harness",
     "model",
-    "reasoning-effort"
+    "reasoning-effort",
+    "magpie",
+    "magpie-plugin"
   ]
 }
