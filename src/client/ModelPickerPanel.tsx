@@ -318,7 +318,7 @@ export function ModelPickerPanel(props: {
     // 点击轨道直达：pointerdown 即锁最近档
     if (efforts !== undefined && efforts.length >= 2 && dragRectRef.current !== null) {
       const rect0 = dragRectRef.current
-      const raw0 = (e.clientX - rect0.left - 10) / Math.max(rect0.width - 20, 1)
+      const raw0 = (e.clientX - rect0.left - 8) / Math.max(rect0.width - 16, 1)
       lockSnap(Math.round(Math.min(Math.max(raw0, 0), 1) * (efforts.length - 1)))
     }
     try {
@@ -331,7 +331,7 @@ export function ModelPickerPanel(props: {
       // 拖动阈值：平面位移越过 5px 才进入跟手（区分点击与拖动）
       if (Math.hypot(ev.clientX - startXRef.current, ev.clientY - startYRef.current) < 5) return
       const rect = dragRectRef.current
-      const raw = (ev.clientX - rect.left - 10) / Math.max(rect.width - 20, 1)
+      const raw = (ev.clientX - rect.left - 8) / Math.max(rect.width - 16, 1)
       const clamped = Math.min(Math.max(raw, 0), 1)
       dragRatioRef.current = clamped
       setDragRatio(clamped)
@@ -577,7 +577,7 @@ export function ModelPickerPanel(props: {
               <span
                 className="dsh003-picker-fill"
                 style={{
-                  width: `calc(10px + (100% - 20px) * ${positionRatio})`,
+                  width: `calc(8px + (100% - 16px) * ${positionRatio})`,
                 }}
               />
               {efforts.map((level, i) => {
@@ -589,7 +589,7 @@ export function ModelPickerPanel(props: {
                     className="dsh003-picker-tick"
                     data-max={isMax ? 'true' : 'false'}
                     style={{
-                      left: `calc(10px + (100% - 20px) * ${tickRatio})`,
+                      left: `calc(8px + (100% - 16px) * ${tickRatio})`,
                     }}
                     title={level.description ?? level.name}
                   />
@@ -598,7 +598,7 @@ export function ModelPickerPanel(props: {
               <span
                 className="dsh003-picker-knob"
                 style={{
-                  left: `calc(10px + (100% - 20px) * ${positionRatio})`,
+                  left: `calc(8px + (100% - 16px) * ${positionRatio})`,
                 }}
               />
             </div>

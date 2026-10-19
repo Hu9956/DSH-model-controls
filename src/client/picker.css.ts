@@ -505,12 +505,12 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   color: var(--dsw-alias-label-secondary) !important;
 }
 
-/* 右侧横向滑轨容器（槽：20px 高横胶囊，原竖轨 20px 宽全高倒过来） */
+/* 右侧横向滑轨容器（槽：20px 高，6px 圆角，与把手完全对齐） */
 .dsh003-picker-slider {
   position: relative !important;
   flex: 1 1 auto !important;
   height: 20px !important;
-  border-radius: 999px !important;
+  border-radius: var(--dshT3-radius-sm, 6px) !important;
   background: var(--dsw-alias-interactive-bg-hover) !important;
 }
 
@@ -542,13 +542,13 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   background: color-mix(in oklch, var(--dshT3-primary, var(--dsw-alias-label-primary)) 65%, var(--dsw-alias-bg-layer-1)) !important;
 }
 
-/* 滑过深灰段：真元素，自槽左端（Off 端）向右长到珠心，width 由行内样式按 ratio 计算 */
+/* 滑过深灰段：自槽左端向右长到珠心，width 由行内样式按 ratio 计算 */
 .dsh003-picker-fill {
   position: absolute !important;
   top: 0 !important;
   left: 0 !important;
   height: 100% !important;
-  border-radius: 999px 0 0 999px !important;
+  border-radius: var(--dshT3-radius-sm, 6px) !important;
   background: var(--dsw-alias-interactive-bg-active) !important;
   pointer-events: none !important;
   transition: width 120ms ease !important;
