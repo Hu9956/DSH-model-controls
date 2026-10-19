@@ -206,7 +206,7 @@ export function ModelPickerPanel(props: {
 
   const normalized = query.trim().toLocaleLowerCase()
 
-  // 底部推理等级：提取当前模型及其档位
+  // 底部思考深度：提取当前模型及其档位
   const currentProvider = providers.find(p => p.id === current?.provider)
   const currentModel = currentProvider?.models.find(m => m.id === current?.model)
   const reasoning = currentModel?.reasoning
@@ -221,7 +221,7 @@ export function ModelPickerPanel(props: {
     return idx >= 0 ? idx : 0
   }, [efforts, effectiveEffort])
 
-  // —— 滑杆机制（完全对齐原推理等级选择器 EffortPickerButton.tsx，横向化映射）——
+  // —— 滑杆机制（完全对齐原思考深度/等级选择器 EffortPickerButton.tsx，横向化映射）——
   // 行为三条：
   // ① 点击轨道=珠直接滑到点击处最近档（pointerdown 即锁，原生 range onChange 等价）
   // ② 拖动=5px 阈值越过才判拖动（手抖微动=点击），拖动中 1:1 跟手，data-dragging 关位移过渡零迟滞

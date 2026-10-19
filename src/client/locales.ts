@@ -119,7 +119,7 @@ export const pickerZh: Record<PickerKey, string> = {
   favoriteAdd: '收藏',
   favoriteRemove: '取消收藏',
   providerReorderHint: '{name} · 长按拖动排序（Alt + ↑/↓）',
-  effortLabel: '推理等级',
+  effortLabel: '思考深度',
   emptyFavorites: '暂无收藏；点击模型行右侧的星标即可收藏。',
   emptyNoMatch: '没有匹配的模型。',
   loadingCatalog: '正在加载模型目录…',
@@ -131,5 +131,5 @@ export const pickerZh: Record<PickerKey, string> = {
   modelFallback: '模型',
   switchFailed: '模型或档位切换失败，请重试。',
   triggerAria: '选择模型，当前 {model}',
-  triggerAriaEffort: '选择模型，当前 {model}，推理等级 {effort}',
+  triggerAriaEffort: '选择模型，当前 {model}，思考深度 {effort}',
 }

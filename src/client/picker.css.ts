@@ -69,7 +69,7 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
 }
-/* 推理等级：官方 caption 用色；空间不足时优先收缩并省略。 */
+/* 思考深度：官方 caption 用色；空间不足时优先收缩并省略。 */
 .dsh003-picker-btn-effort {
   flex-shrink: 1000 !important;
   min-width: 0 !important;
