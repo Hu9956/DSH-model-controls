@@ -11,7 +11,7 @@ import { displayProviderIcon } from './display-identity'
 import { createCatalogAdapter, type ModelDirectoryFace } from './model-catalog'
 import { compactModelName, isMagpieRoute, splitMagpieModelName } from './magpie-display'
 import { compactNamesEnabled } from './compact-names'
-import { effortKeyOf, effortProgress } from './effort-labels'
+import { effortKeyOf, effortMeterHeight, effortProgress } from './effort-labels'
 import { useButtonCollapse } from './use-effort-truncation'
 import { format, pickerZh, type PickerKey, type Translate } from './locales'
 
@@ -155,12 +155,22 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
     return key === undefined ? currentEffortName : t(key)
   }, [currentEffortName, t])
 
-  /** 竖条填充比例：档位文字被截断时替代它显示。没有档位的模型不渲染竖条。 */
+  /** 竖条填充比例：档位文字被截断时替代它显示。没有档位的模型不渲染竖条。
+   *  用 effortMeterHeight 而不是 effortProgress：后者与面板滑杆严格同刻度
+   *  （最低档为 0），但 12px 高的竖条分不出「0」与「关闭」，所以绘制时抬到最小可见高度。 */
   const buttonEffortProgress = React.useMemo(() => {
     const reasoning = currentModel?.reasoning
     const effort = catalog.default?.reasoningEffort ?? reasoning?.defaultEffort
     if (reasoning === undefined || reasoning.efforts.length <= 1) return null
     return effortProgress(reasoning.efforts.map(e => e.id), effort)
+  }, [catalog.default?.reasoningEffort, currentModel])
+
+  /** 实际画出来的高度：与滑杆同刻度，但最低的有效档也看得见。 */
+  const buttonMeterHeight = React.useMemo(() => {
+    const reasoning = currentModel?.reasoning
+    const effort = catalog.default?.reasoningEffort ?? reasoning?.defaultEffort
+    if (reasoning === undefined || reasoning.efforts.length <= 1) return null
+    return effortMeterHeight(reasoning.efforts.map(e => e.id), effort)
   }, [catalog.default?.reasoningEffort, currentModel])
 
   /** 折叠判定：按实测溢出量决定收箭头 / 换竖条，详见 use-effort-truncation.ts。 */
@@ -240,12 +250,12 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
             className="dsh003-picker-effort-meter"
             role="img"
             aria-label={buttonEffortName ?? ''}
-            data-empty={buttonEffortProgress === 0 ? 'true' : undefined}
+            data-empty={buttonMeterHeight === 0 ? 'true' : undefined}
             data-progress={buttonEffortProgress}
           >
             <span
               className="dsh003-picker-effort-meter-fill"
-              style={{ height: `${buttonEffortProgress * 100}%` }}
+              style={{ height: `${(buttonMeterHeight ?? 0) * 100}%` }}
             />
           </span>
         )}

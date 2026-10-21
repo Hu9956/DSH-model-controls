@@ -60,10 +60,18 @@ const OFF_EFFORTS: ReadonlySet<string> = new Set(['off', 'none', 'disabled', 'fa
 /**
  * 竖条填充比例：0 到 1。
  *
- * 参照 ZCode 的 `composer-thought-meter` 做法，用「第几档 / 总档数」而不是
- * 「第几档 / (总档数-1)」，让最低的有效档也占到一格，竖条不会矮到看不见。
+ * **必须与面板滑杆同一套刻度**：`第几档 / (档数 − 1)`。
  *
- * 两处与它不同：
+ * 曾经这里用 ZCode 的「(第几档 + 1) / 总档数」，让最低的有效档也占一格。
+ * 但面板滑杆用的是 `第几档 / (档数 − 1)`，两套并存的结果是同一个模型
+ * 在两处显示差一档：3 档模型里「中」在滑杆上是 50%、在竖条上却是 67%，
+ * 「低」在滑杆上是 0%、竖条上却是 33%。用户看到的就是「中等快满了、
+ * 低档还有三成」。
+ *
+ * 权衡：宁可最低档的竖条矮到几乎看不见，也要与滑杆一致——竖直方向的比例
+ * 会被眼睛直接比较，而「最低档到底是 0% 还是 1/n」没有参照物可比。
+ *
+ * 两处保留 ZCode 的处理：
  * - **关闭档为 0**：`off` 表示不思考，填满或占一格都会读成「有强度」，
  *   因此返回 0，界面只画空轨道（轨道本身留着，区别于「这个模型没有档位」）。
  * - 关闭档不参与分母：3 档模型里 `off/low/high` 的 `high` 是最强，应该满格。
@@ -80,5 +88,34 @@ export function effortProgress(effortIds: readonly string[], activeId: string | 
   const scaled = effortIds.map(normalize).filter(id => !OFF_EFFORTS.has(id))
   const rank = scaled.indexOf(wanted)
   if (rank < 0) return 0
-  return (rank + 1) / scaled.length
+  // 单档模型：没有「进度」可言，但也不该是 0（那会看起来像关闭）。
+  if (scaled.length <= 1) return 1
+  // 与面板滑杆一致：最低档 0%、最高档 100%。
+  return rank / (scaled.length - 1)
+}
+
+/**
+ * 竖条的**可见**填充高度比例：在 {@link effortProgress} 之上保证最低的有效档
+ * 也画得出来。
+ *
+ * 为什么不直接改 progress：那个值要与面板滑杆严格同刻度，最低档必须是 0。
+ * 但竖条只有 12px 高，0 与「关闭」在视觉上完全一样，用户无法区分
+ * 「这个模型最低档」与「思考已关闭」。所以只在绘制时抬到最小可见高度。
+ *
+ * 抬升只作用于最低的那一格，且永远小于下一档，因此不会打乱档位顺序。
+ *
+ * @param effortIds - 该模型声明的全部档位 id，按由弱到强排列。
+ * @param activeId - 当前生效的档位 id。
+ * @returns 0 到 1 的绘制比例；关闭档仍为 0（只画空轨道）。
+ */
+export function effortMeterHeight(effortIds: readonly string[], activeId: string | undefined): number {
+  const progress = effortProgress(effortIds, activeId)
+  if (progress > 0) return progress
+  // progress 为 0 有两种含义：关闭思考，或处在最低的有效档。前者必须保持 0。
+  if (activeId === undefined) return 0
+  const wanted = normalize(activeId)
+  if (OFF_EFFORTS.has(wanted)) return 0
+  const scaled = effortIds.map(normalize).filter(id => !OFF_EFFORTS.has(id))
+  // 最低的有效档：给一个看得见但不抢眼的起点。
+  return scaled.includes(wanted) ? 0.25 : 0
 }
