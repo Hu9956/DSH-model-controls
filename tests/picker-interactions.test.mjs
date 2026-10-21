@@ -15,6 +15,13 @@ for (const name of ['window', 'document', 'navigator', 'Element', 'HTMLElement',
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 win.HTMLElement.prototype.scrollIntoView = function () {}
+// jsdom 没有 ResizeObserver；组件用它测量档位文字是否被截断。
+// 测试里给一个不触发的桩：默认按「未截断」处理，需要截断的用例自己覆盖。
+win.ResizeObserver = class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
 win.HTMLElement.prototype.setPointerCapture = function () {}
 win.HTMLElement.prototype.releasePointerCapture = function () {}
 win.HTMLElement.prototype.getBoundingClientRect = function () {
@@ -27,21 +34,58 @@ const React = require('react')
 const { createRoot } = require('react-dom/client')
 const { act } = React
 // Host module contract fixture: production receives the official form model and styled controls.
+// It mirrors the official model's contract for the fields a card declares: every field reads its
+// own section value, stages its own draft, and saves the ordered writes it planned.
 class SettingsFormModel {
-  constructor(scope, specs) { this.scope = scope; this.spec = specs[0]; this.draft = null; this.listeners = new Set() }
-  shell() { return { available: true, writable: true, dirty: this.draft !== null, invalid: this.field().invalid, saving: false, failed: false } }
-  field() { const text = this.draft ?? this.scope.getSnapshot().value.magpieBaseURL; return { text, invalid: this.spec.parse(text) === undefined, overridden: this.draft !== null } }
+  constructor(scope, specs) {
+    this.scope = scope
+    this.specs = new Map(specs.map(spec => [spec.field, spec]))
+    this.drafts = new Map()
+    this.listeners = new Set()
+  }
+  shell() {
+    return {
+      available: true, writable: true, dirty: this.drafts.size > 0,
+      invalid: [...this.specs.keys()].some(field => this.field(field).invalid),
+      saving: false, failed: false,
+    }
+  }
+  field(name) {
+    const spec = this.specs.get(name)
+    const stored = spec.format(this.scope.getSnapshot().value?.[name])
+    const staged = this.drafts.get(name)
+    const text = staged === undefined ? stored : staged
+    const write = staged === undefined ? { kind: 'set' } : spec.parse(staged)
+    return { text, invalid: write === undefined, overridden: staged !== undefined && write?.kind === 'set' }
+  }
   bind(project) { let state = project(); this.publish = () => { state = project(); for (const fn of this.listeners) fn() }; return { getSnapshot: () => state, subscribe: fn => { this.listeners.add(fn); return () => this.listeners.delete(fn) } } }
-  actions() { return { edit: (_field, text) => { this.draft = text; this.publish() }, discard: () => {}, save: async () => {
-    const parsed = this.spec.parse(this.field().text); if (!parsed) return
-    await this.scope.mutate([{ op: 'set', path: [this.spec.field], value: parsed.value }], this.scope.getSnapshot().revision)
-    this.draft = null; this.publish()
-  } } }
+  actions() {
+    return {
+      edit: (field, text) => { this.drafts.set(field, text); this.publish() },
+      resetField: (field) => { this.drafts.set(field, ''); this.publish() },
+      discard: () => { this.drafts.clear(); this.publish() },
+      save: async () => {
+        const ops = []
+        for (const [field, spec] of this.specs) {
+          if (!this.drafts.has(field)) continue
+          const parsed = spec.parse(this.drafts.get(field))
+          if (parsed === undefined) return
+          ops.push(parsed.kind === 'clear'
+            ? { op: 'unset', path: [field] }
+            : { op: 'set', path: [field], value: parsed.value })
+        }
+        if (ops.length === 0) return
+        await this.scope.mutate(ops, this.scope.getSnapshot().revision)
+        this.drafts.clear(); this.publish()
+      },
+    }
+  }
   dispose() {}
 }
 let descriptor
 runInNewContext(readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8'), {
   document: win.document, Element: win.Element, Node: win.Node, URL: win.URL, console,
+  ResizeObserver: win.ResizeObserver,
   // Only the loader belongs to the fake host; events and hooks use a real DOM and React.
   window: Object.assign(win, { __ModuleLoader__: { load: value => { descriptor = value } } }),
 })
@@ -85,6 +129,7 @@ function fixture() {
   return { directory, calls, publish }
 }
 const query = selector => win.document.querySelector(selector)
+const queryAll = selector => [...win.document.querySelectorAll(selector)]
 const rows = () => [...win.document.querySelectorAll('.dsh003-picker-model-row')]
 const action = async fn => { await act(async () => { fn() }) }
 const render = async directory => { await action(() => root.render(React.createElement(plugin.ModelPickerButton, { directory }))) }
@@ -92,6 +137,72 @@ const open = async () => { await action(() => query('.dsh003-picker-btn').click(
 const key = async (element, value, type = 'keydown') => {
   await action(() => element.dispatchEvent(new win.KeyboardEvent(type, { key: value, bubbles: true, cancelable: true })))
 }
+
+/**
+ * 给 jsdom 补一份「真实几何」：它不排版，所有 box 都是 0，
+ * 折叠判定因此无从测量。这里只伪造**测量输入**（行可用宽度、各探针宽度、
+ * 按钮内边距与间距），决策逻辑仍跑真实实现。
+ *
+ * @param {{ available: number, effort: number, chevron?: number, logo?: number }} spec
+ * @returns 还原函数。
+ */
+function stubLayout({ available, effort, chevron = 14, logo = 16 }) {
+  // 顺序敏感：档位文字探针只带通用类，必须放在专属类之后判断，
+  // 否则 logo / 箭头 / 竖条探针都会被它抢先匹配。
+  const widths = [
+    ['dsh003-picker-logo-probe', logo],
+    ['dsh003-picker-chev-probe', chevron],
+    ['dsh003-picker-meter-probe', 3],
+    ['dsh003-picker-probe', effort],
+  ]
+  // 注意：文件顶部给 HTMLElement.prototype 设过兜底桩，它遮蔽 Element.prototype，
+  // 所以这里必须覆盖 HTMLElement.prototype 才能生效。
+  const rect = win.HTMLElement.prototype.getBoundingClientRect
+  const box = width => ({ width, height: 20, top: 0, left: 0, right: width, bottom: 20, x: 0, y: 0, toJSON() {} })
+  win.HTMLElement.prototype.getBoundingClientRect = function () {
+    const classes = String(this.className ?? '').split(/\s+/)
+    for (const [cls, width] of widths) {
+      if (classes.includes(cls)) return box(width)
+    }
+    // 探针容器本身按内容收缩，量它没有意义；统一按 0 处理，避免误取兜底宽度。
+    if (classes.includes('dsh003-picker-probes')) return box(0)
+    return rect.call(this)
+  }
+  // 行可用宽度：折叠判定从 #app 的 clientWidth 读。
+  const clientWidth = Object.getOwnPropertyDescriptor(win.Element.prototype, 'clientWidth')
+  Object.defineProperty(win.Element.prototype, 'clientWidth', {
+    configurable: true,
+    get() { return this.id === 'app' ? available : (clientWidth?.get?.call(this) ?? 0) },
+  })
+  // 行必须是 container-type: inline-size（真实宿主如此），按钮的内边距与间距也要有值。
+  // jsdom 的 getComputedStyle 返回一个普通对象（不是 live 的 CSSStyleDeclaration），
+  // 所以包一层最省事：按元素决定要覆盖哪些属性。
+  const computed = win.getComputedStyle.bind(win)
+  win.getComputedStyle = (element, pseudo) => {
+    const style = computed(element, pseudo)
+    const isRow = element instanceof win.Element && element.id === 'app'
+    const isButton = element instanceof win.Element && element.classList?.contains('dsh003-picker-btn')
+    if (!isRow && !isButton) return style
+    // 返回对象可写（每次都是新的），直接改它即可。
+    if (isRow) {
+      style.containerType = 'inline-size'
+      style.paddingLeft = '0px'
+      style.paddingRight = '0px'
+    } else {
+      style.paddingLeft = '8px'
+      style.paddingRight = '4px'
+    }
+    style.columnGap = '4px'
+    return style
+  }
+  return () => {
+    win.HTMLElement.prototype.getBoundingClientRect = rect
+    if (clientWidth === undefined) delete win.Element.prototype.clientWidth
+    else Object.defineProperty(win.Element.prototype, 'clientWidth', clientWidth)
+    win.getComputedStyle = computed
+  }
+}
+
 const pointer = async (target, type, pointerId = 1, clientX = 280, clientY = 410) => {
   const event = new win.MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX, clientY })
   Object.defineProperties(event, { pointerId: { value: pointerId }, isPrimary: { value: true } })
@@ -109,7 +220,7 @@ test('plugin settings renders its labeled address, saves and clears through the 
   const t = key => { if (!(key in settingsZh)) missing.push(key); return settingsZh[key] }
   await action(() => root.render(React.createElement(plugin.ModelControlsSettings, { view: 'page', form, t })))
   const input = query('#dsh-model-controls-magpie')
-  assert.equal(query('label').htmlFor, input.id)
+  assert.equal(query('label[for="dsh-model-controls-magpie"]').htmlFor, input.id)
   // The page must use official settings components only: no hand-rolled disclosure box.
   assert.equal(query('details, summary'), null)
   assert.equal(input.getAttribute('placeholder'), '例如 http://127.0.0.1:3425/v1')
@@ -147,19 +258,233 @@ test('the two dictionaries stay in step and the page renders English when the lo
   await action(() => root.render(React.createElement(plugin.ModelControlsSettings, { view: 'page', form, t })))
   const input = query('#dsh-model-controls-magpie')
   assert.equal(input.getAttribute('placeholder'), settingsEn.addressPlaceholder)
-  assert.equal(query('label').textContent, settingsEn.addressLabel)
+  assert.equal(query('label[for="dsh-model-controls-magpie"]').textContent, settingsEn.addressLabel)
   assert.equal(query('button[type="submit"]').textContent, settingsEn.save)
   assert.ok(asked.every(key => key in settingsEn), 'every requested key must exist in the English dictionary')
   assert.ok(!/搜索|保存|备用/.test(win.document.body.textContent), 'no Chinese copy may leak into the English page')
+})
+
+test('the trigger shortens the model name but keeps the route source verbatim', async () => {
+  const f = fixture()
+  f.publish({
+    current: { provider: 'magpie', model: 'a', reasoningEffort: 'high' },
+    groups: [{ id: 'magpie', name: 'Magpie', models: [{ id: 'a', name: 'Deepseek-V4.1-Flash · routing group',
+      reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'high' } }] }],
+  })
+  await render(f.directory)
+  const trigger = query('.dsh003-picker-btn')
+  // 品牌词去掉、路由来源原样保留（供应商不改）。
+  assert.equal(query('.dsh003-picker-btn-label').textContent, 'V4.1-Flash · routing group')
+  // 档位跟随界面语言：默认中文兜底。
+  assert.equal(query('.dsh003-picker-btn-effort').textContent, '高')
+  // 悬停提示仍是完整上游名，压缩不外溢。
+  assert.equal(trigger.getAttribute('title'), 'Deepseek-V4.1-Flash · routing group · High')
+})
+
+test('a model with no brand prefix keeps its full name on the trigger', async () => {
+  const f = fixture()
+  f.publish({
+    current: { provider: 'p', model: 'a', reasoningEffort: 'low' },
+    groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'Step-5-Preview · WorkBuddy AI',
+      reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'low' } }] }],
+  })
+  await render(f.directory)
+  assert.equal(query('.dsh003-picker-btn-label').textContent, 'Step-5-Preview · WorkBuddy AI')
+})
+
+test('the effort on the trigger follows the interface language', async () => {
+  const f = fixture()
+  f.publish({
+    current: { provider: 'p', model: 'a', reasoningEffort: 'high' },
+    groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'Model a',
+      reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'high' } }] }],
+  })
+  const t = (key, params) => {
+    const template = pickerEn[key]
+    assert.ok(template !== undefined, `missing English key: ${key}`)
+    if (params === undefined) return template
+    return template.replace(/\{(\w+)\}/g, (whole, name) => name in params ? String(params[name]) : whole)
+  }
+  await action(() => root.render(React.createElement(plugin.ModelPickerButton, { directory: f.directory, t })))
+  assert.equal(query('.dsh003-picker-btn-effort').textContent, 'High')
+  assert.equal(query('.dsh003-picker-btn').getAttribute('aria-label'),
+    'Choose a model, currently Model a, reasoning effort High')
+})
+
+test('the effort slider names a level in the interface language', async () => {
+  const f = fixture(); await render(f.directory); await open()
+  assert.equal(query('.dsh003-picker-effort-val').textContent, '低')
+  assert.equal(query('[role="slider"]').getAttribute('aria-valuetext'), '低')
+})
+
+test('the settings page stages and saves the model-name preference', async () => {
+  let state = { status: 'ready', writable: true, revision: 5, base: {}, user: {}, value: { compactModelNames: 'on', magpieBaseURL: '' } }
+  const calls = []
+  const form = { getSnapshot: () => state, subscribe: () => () => {}, mutate: async (ops, revision) => {
+    calls.push({ ops, revision }); return true
+  } }
+  const t = key => settingsZh[key]
+  await action(() => root.render(React.createElement(plugin.ModelControlsSettings, { view: 'page', form, t })))
+  const input = query('#dsh-model-controls-compact')
+  assert.equal(query('label[for="dsh-model-controls-compact"]').textContent, settingsZh.compactNamesLabel)
+  assert.equal(input.getAttribute('placeholder'), 'on 或 off')
+  assert.equal(input.value, 'on', 'the stored preference seeds the draft')
+  async function edit(value) { await action(() => {
+    Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set.call(input, value)
+    input.dispatchEvent(new win.Event('input', { bubbles: true }))
+  }) }
+  await edit('off')
+  await action(() => query('form').dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true })))
+  assert.deepEqual(calls[0].ops, [{ op: 'set', path: ['compactModelNames'], value: 'off' }])
+  // Anything other than on/off blocks the save instead of silently discarding the edit.
+  await edit('maybe')
+  assert.equal(input.getAttribute('aria-invalid'), 'true')
+  await action(() => query('form').dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true })))
+  assert.equal(calls.length, 1)
+  // Clearing stages a clear, so the field re-inherits the default.
+  await edit('')
+  await action(() => query('form').dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true })))
+  assert.deepEqual(calls[1].ops, [{ op: 'unset', path: ['compactModelNames'] }])
+})
+
+test('the model entry keeps its full name when the preference is off', async () => {
+  win.__DSH_MODEL_CONTROLS_COMPACT_NAMES__ = false
+  try {
+    const f = fixture()
+    f.publish({
+      current: { provider: 'magpie', model: 'a', reasoningEffort: 'high' },
+      groups: [{ id: 'magpie', name: 'Magpie', models: [{ id: 'a', name: 'Deepseek-V4.1-Flash · routing group',
+        reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'high' } }] }],
+    })
+    await render(f.directory)
+    assert.equal(query('.dsh003-picker-btn-label').textContent, 'Deepseek-V4.1-Flash · routing group')
+  } finally { delete win.__DSH_MODEL_CONTROLS_COMPACT_NAMES__ }
+})
+
+test('the model entry shortens names when the preference is absent or on', async () => {
+  for (const value of [undefined, true]) {
+    if (value === undefined) delete win.__DSH_MODEL_CONTROLS_COMPACT_NAMES__
+    else win.__DSH_MODEL_CONTROLS_COMPACT_NAMES__ = value
+    const f = fixture()
+    f.publish({
+      current: { provider: 'magpie', model: 'a', reasoningEffort: 'high' },
+      groups: [{ id: 'magpie', name: 'Magpie', models: [{ id: 'a', name: 'Deepseek-V4.1-Flash · routing group',
+        reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'high' } }] }],
+    })
+    const host = win.document.createElement('div')
+    win.document.body.appendChild(host)
+    await render(f.directory)
+    assert.equal(query('.dsh003-picker-btn-label').textContent, 'V4.1-Flash · routing group',
+      `expected a shortened name for ${String(value)}`)
+    host.remove()
+  }
+  delete win.__DSH_MODEL_CONTROLS_COMPACT_NAMES__
+})
+
+test('the trigger renders an effort meter when the effort word does not fit', async () => {
+  // 折叠判定是实测的：这里给出「按钮只剩 60px」的几何，档位文字 26px，
+  // 连「logo + 文字 + 一个字宽模型名」都放不下 → 应换竖条。
+  const restore = stubLayout({ available: 60, effort: 26 })
+  try {
+    const f = fixture()
+    f.publish({
+      current: { provider: 'p', model: 'a', reasoningEffort: 'high' },
+      groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'Model a',
+        reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'medium', name: 'Medium' }, { id: 'high', name: 'High' }], defaultEffort: 'low' } }] }],
+    })
+    await render(f.directory)
+    await action(() => {})
+    const meter = query('.dsh003-picker-effort-meter')
+    assert.ok(meter !== null, 'an effort word that does not fit must give way to the meter')
+    assert.equal(query('.dsh003-picker-btn').getAttribute('data-meter'), 'true')
+    // 3 档里的最强档 → 满格；填充方向由 CSS 的 bottom:0 决定。
+    assert.equal(meter.getAttribute('data-progress'), '1')
+    assert.equal(query('.dsh003-picker-effort-meter-fill').style.height, '100%')
+    // 读屏应读到当前档位名，而不是一个空 span。
+    assert.equal(meter.getAttribute('aria-label'), '高')
+  } finally { restore() }
+})
+
+test('the meter stays hidden while the effort word still fits', async () => {
+  const restore = stubLayout({ available: 360, effort: 26 })
+  try {
+    const f = fixture()
+    f.publish({
+      current: { provider: 'p', model: 'a', reasoningEffort: 'high' },
+      groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'Model a',
+        reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'low' } }] }],
+    })
+    await render(f.directory)
+    await action(() => {})
+    assert.equal(query('.dsh003-picker-btn').getAttribute('data-meter'), 'false',
+      'no meter while the word is readable')
+    assert.equal(query('.dsh003-picker-btn-effort').textContent, '高')
+  } finally { restore() }
+})
+
+test('the chevron stays while the effort word and model name have room', async () => {
+  // 断点之上、且能放下最宽档位文字：箭头必须留着（它是唯一的展开提示）。
+  const restore = stubLayout({ available: 200, effort: 62 })
+  try {
+    const f = fixture()
+    f.publish({
+      current: { provider: 'p', model: 'a', reasoningEffort: 'high' },
+      groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'Model a',
+        reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'low' } }] }],
+    })
+    await render(f.directory)
+    await action(() => {})
+    const trigger = query('.dsh003-picker-btn')
+    assert.equal(trigger.getAttribute('data-compact-chev'), 'false')
+    assert.equal(trigger.getAttribute('data-meter'), 'false')
+  } finally { restore() }
+})
+
+test('the measured width is written to the button so the row never wraps', async () => {
+  const restore = stubLayout({ available: 260, effort: 26 })
+  try {
+    const f = fixture()
+    f.publish({
+      current: { provider: 'p', model: 'a', reasoningEffort: 'high' },
+      groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'Model a',
+        reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'low' } }] }],
+    })
+    await render(f.directory)
+    await action(() => {})
+    // CSS 用 var(--dsh003-max) 当 max-width：宽度来自实测，不是硬编码公式。
+    // 减去 1px：算到「刚好占满」时亚像素舍入会让宿主判定放不下而换行。
+    assert.equal(query('.dsh003-picker-btn').style.getPropertyValue('--dsh003-max'), '259px')
+  } finally { restore() }
+})
+
+test('a model without levels carries no meter', async () => {
+  const f = fixture()
+  f.publish({
+    current: { provider: 'p', model: 'a' },
+    groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'Model a' }] }],
+  })
+  await render(f.directory)
+  await action(() => {})
+  assert.equal(query('.dsh003-picker-effort-meter'), null, 'no reasoning levels means nothing to meter')
+})
+
+test('a model without effort levels renders no meter at all', async () => {
+  const f = fixture()
+  f.publish({
+    current: { provider: 'p', model: 'a', reasoningEffort: 'low' },
+    groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'Model a' }] }],
+  })
+  await render(f.directory)
+  assert.equal(query('.dsh003-picker-effort-meter'), null)
 })
 
 test('pointercancel restores the confirmed effort and sends no selection', async () => {
   const f = fixture(); await render(f.directory); await open()
   const slider = query('[role="slider"]')
   await pointer(slider, 'pointerdown'); await pointer(win, 'pointermove')
-  assert.equal(slider.getAttribute('aria-valuetext'), 'High')
+  assert.equal(slider.getAttribute('aria-valuetext'), '高')
   await pointer(win, 'pointercancel')
-  assert.equal(slider.getAttribute('aria-valuetext'), 'Low')
+  assert.equal(slider.getAttribute('aria-valuetext'), '低')
   await pointer(win, 'pointerup')
   assert.equal(f.calls.length, 0)
 })
@@ -178,7 +503,7 @@ test('lost pointer capture cancels instead of committing', async () => {
   await pointer(slider, 'pointerdown'); await pointer(slider, 'lostpointercapture')
   await pointer(win, 'pointerup')
   assert.equal(f.calls.length, 0)
-  assert.equal(slider.getAttribute('aria-valuetext'), 'Low')
+  assert.equal(slider.getAttribute('aria-valuetext'), '低')
 })
 test('a model change during dragging cannot submit an old model effort', async () => {
   const f = fixture(); await render(f.directory); await open()
@@ -186,7 +511,7 @@ test('a model change during dragging cannot submit an old model effort', async (
   await action(() => f.publish({ current: { provider: 'p', model: 'b', reasoningEffort: 'low' } }))
   await pointer(win, 'pointerup')
   assert.equal(f.calls.length, 0)
-  assert.equal(query('[role="slider"]').getAttribute('aria-valuetext'), 'Low')
+  assert.equal(query('[role="slider"]').getAttribute('aria-valuetext'), '低')
 })
 test('closing during dragging removes listeners and sends no selection', async () => {
   const f = fixture(); await render(f.directory); await open()
@@ -258,13 +583,49 @@ test('a failure from the previous session does not appear in a new directory', a
   await action(() => response.resolve({ ok: false }))
   assert.equal(query('[role="alert"]'), null)
 })
-test('partial provider failure keeps usable models and displays a warning', async () => {
-  const f = fixture(); f.publish({ failures: [{ provider: 'missing', error: 'offline' }] })
+test('a provider failure names the provider and offers a retry', async () => {
+  // 宿主真实结构是 { id, name, message }（见官方 ModelSelect 的 failures.map）。
+  // 只说一句「部分提供方加载失败」会让用户不知道该改哪个配置。
+  const f = fixture()
+  f.publish({ failures: [{ id: 'missing', name: 'Missing Provider', message: 'offline' }] })
+  let reloads = 0
+  f.directory.load = async () => { reloads += 1 }
   await render(f.directory); await open()
-  assert.match(query('[role="status"]').textContent, /部分提供方/)
+  // 挂载与打开面板本来就会各拉一次目录，这里只关心「点重试是否又拉了一次」。
+  const before = reloads
+  const status = query('[role="status"]')
+  assert.match(status.textContent, /Missing Provider/)
+  assert.match(status.textContent, /offline/)
+  const retry = status.querySelector('.dsh003-picker-retry')
+  assert.ok(retry !== null, 'a failed provider must offer a retry button')
+  await action(() => retry.click())
+  assert.equal(reloads, before + 1, 'retry must reload the catalog')
+  // 可用的模型不受影响。
   assert.equal(rows().length, 3)
   await action(() => f.publish({ failures: [] }))
   assert.equal(query('[role="status"]'), null)
+})
+
+test('a failed provider without a name falls back to its id', async () => {
+  const f = fixture()
+  f.publish({ failures: [{ id: 'acme', message: 'timeout' }] })
+  await render(f.directory); await open()
+  assert.match(query('[role="status"]').textContent, /acme/)
+})
+
+test('a catalog load error offers a retry instead of only a message', async () => {
+  const f = fixture()
+  f.publish({ status: 'error', error: 'boom' })
+  let reloads = 0
+  f.directory.load = async () => { reloads += 1 }
+  await render(f.directory); await open()
+  const before = reloads
+  const alert = query('[role="alert"]')
+  assert.match(alert.textContent, /boom/)
+  const retry = alert.querySelector('.dsh003-picker-retry')
+  assert.ok(retry !== null, 'a load failure must be retryable in place')
+  await action(() => retry.click())
+  assert.equal(reloads, before + 1)
 })
 test('menu placement preserves normal size, shrinks above, flips below and stays in bounds', () => {
   const cases = [
@@ -291,7 +652,7 @@ test('blur cancels an active pointer drag rather than committing a keyboard prev
   await action(() => slider.focus()); await pointer(slider, 'pointerdown')
   await action(() => query('.dsh003-picker-search').focus()); await pointer(win, 'pointerup')
   assert.equal(f.calls.length, 0)
-  assert.equal(slider.getAttribute('aria-valuetext'), 'Low')
+  assert.equal(slider.getAttribute('aria-valuetext'), '低')
 })
 test('Escape cancels a keyboard preview before restoring trigger focus', async () => {
   const f = fixture(); await render(f.directory); await open()
@@ -363,7 +724,7 @@ test('window blur cancels an effort drag even when focus stays in search; a new 
   assert.equal(win.document.activeElement, query('.dsh003-picker-search'))
   await pointer(slider, 'pointerdown'); await pointer(win, 'pointermove', 1, 285)
   await action(() => win.dispatchEvent(new win.Event('blur')))
-  assert.equal(slider.getAttribute('aria-valuetext'), 'Low')
+  assert.equal(slider.getAttribute('aria-valuetext'), '低')
   await pointer(win, 'pointerup'); assert.equal(f.calls.length, 0)
   await pointer(slider, 'pointerdown'); await pointer(win, 'pointerup')
   assert.equal(f.calls.length, 1)
@@ -723,7 +1084,7 @@ test('long press reorders without switching and persists across reopening and a 
   assert.deepEqual(savedOrder().filter(id => ids.includes(id)), expected)
   await key(query('.dsh003-picker-search'), 'Escape'); await open()
   assert.deepEqual(supplierIds(), expected)
-  runInNewContext(readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8'), { document: win.document, Element: win.Element, Node: win.Node, console, window: win })
+  runInNewContext(readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8'), { document: win.document, Element: win.Element, Node: win.Node, console, ResizeObserver: win.ResizeObserver, window: win })
   const reloaded = descriptor.factory(name => name === '@deepseek-ai/dsh-client-ui-primitives'
     ? { MenuSurface: React.forwardRef((props, ref) => React.createElement('div', { ...props, ref })), IconChevronDownOutlineRegular: () => null, Tooltip: ({ children }) => children }
     : require(name))
