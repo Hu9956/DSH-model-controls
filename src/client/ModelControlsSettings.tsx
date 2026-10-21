@@ -2,7 +2,7 @@ import * as React from 'react'
 import { SettingsForm, SettingsValueField, SettingsFormModel, type SettingsFormScope } from '@deepseek-ai/dsh-client-ui-primitives'
 import { settingsFormLabels, type SettingsKey, type Translate } from './locales'
 
-export type ControlsForm = SettingsFormScope<{ magpieBaseURL?: string }>
+export type ControlsForm = SettingsFormScope<{ magpieBaseURL?: string; compactModelNames?: string }>
 
 /** The page's localized copy reader, injected by the client half's slot registration. */
 export type ControlsTranslate = Translate<SettingsKey>
@@ -24,6 +24,13 @@ function acceptAddress(text: string): { kind: 'set'; value: string } | undefined
   } catch { return undefined }
 }
 
+/** Whether draft text is a model-name preference this plugin accepts; empty clears it. */
+function acceptCompactNames(text: string): { kind: 'set'; value: string } | { kind: 'clear' } | undefined {
+  const value = text.trim().toLowerCase()
+  if (value === '') return { kind: 'clear' }
+  return value === 'on' || value === 'off' ? { kind: 'set', value } : undefined
+}
+
 /**
  * The plugin's settings page: one optional override for a Magpie endpoint the
  * automatic check cannot recognize. An empty value keeps automatic detection.
@@ -35,12 +42,31 @@ export function ModelControlsSettings({ form, t }: ModelControlsSettingsProps) {
     field: 'magpieBaseURL',
     format: value => typeof value === 'string' ? value : '',
     parse: acceptAddress,
+  }, {
+    field: 'compactModelNames',
+    format: value => typeof value === 'string' ? value : '',
+    parse: acceptCompactNames,
   }]), [form])
-  const store = React.useMemo(() => model.bind(() => ({ ...model.shell(), address: model.field('magpieBaseURL') })), [model])
+  const store = React.useMemo(() => model.bind(() => ({
+    ...model.shell(),
+    address: model.field('magpieBaseURL'),
+    compact: model.field('compactModelNames'),
+  })), [model])
   const state = React.useSyncExternalStore(listener => store.subscribe(listener), () => store.getSnapshot())
   React.useEffect(() => () => model.dispose(), [model])
   const actions = model.actions()
   return <SettingsForm state={state} onSave={actions.save} onDiscard={actions.discard} labels={settingsFormLabels(t)}>
+    <SettingsValueField id="dsh-model-controls-compact" label={t('compactNamesLabel')}
+      hint={t('compactNamesHint')}
+      placeholder={t('compactNamesPlaceholder')}
+      help={{ label: t('compactNamesHelpLabel'), content: <>
+        <p>{t('compactNamesHelpOn')}</p>
+        <p>{t('compactNamesHelpOff')}</p>
+      </> }}
+      overriddenLabel={t('overridden')} resetLabel={t('reset')}
+      invalidLabel={t('compactNamesInvalid')}
+      disabled={!state.writable || state.saving} {...state.compact}
+      onEdit={text => actions.edit('compactModelNames', text)} onReset={() => actions.resetField('compactModelNames')} />
     <SettingsValueField id="dsh-model-controls-magpie" label={t('addressLabel')}
       hint={t('addressHint')}
       placeholder={t('addressPlaceholder')}

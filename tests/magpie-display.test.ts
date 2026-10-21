@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { isMagpieRoute, magpieGatewayLabel, splitMagpieModelName } from '../src/client/magpie-display'
+import { isMagpieRoute, magpieGatewayLabel, splitMagpieModelName, compactModelName } from '../src/client/magpie-display'
 
 test('every Magpie protocol route is recognised as the same gateway', () => {
   for (const id of ['magpie', 'magpie-responses', 'magpie-anthropic', 'MAGPIE', ' magpie-responses ']) {
@@ -35,4 +35,46 @@ test('the gateway label comes from the configured route name, never a hard-coded
   // 用户改了网关名，副行跟着变；不假定品牌词。
   assert.equal(magpieGatewayLabel('Gateway · Responses'), 'Gateway')
   assert.equal(magpieGatewayLabel('  Magpie · Responses  '), 'Magpie')
+})
+
+test('the button shortens a model name by dropping a redundant brand prefix', () => {
+  // 品牌 + 版本号：品牌是冗余信息，去掉仍能唯一认出。
+  assert.equal(compactModelName('DeepSeek-V4.1-Flash'), 'V4.1-Flash')
+  assert.equal(compactModelName('Deepseek-V4.1-Flash'), 'V4.1-Flash', 'upstream casing varies')
+  assert.equal(compactModelName('DeepSeek V4.1 Flash Free'), 'V4.1 Flash Free')
+  assert.equal(compactModelName('DeepSeek V4.1 Flash 1017'), 'V4.1 Flash 1017')
+  assert.equal(compactModelName('DeepSeek-V4.1-Flash (Max)'), 'V4.1-Flash (Max)')
+  assert.equal(compactModelName('claude-sonnet-5'), 'sonnet-5')
+  assert.equal(compactModelName('claude-opus-5-5'), 'opus-5-5')
+  assert.equal(compactModelName('MiMo-V2.6-Flash Free'), 'V2.6-Flash Free')
+  assert.equal(compactModelName('GLM-5.3-FlashX (Max)'), '5.3-FlashX (Max)')
+  assert.equal(compactModelName('Qwen3.8-Max'), '3.8-Max')
+})
+
+test('a name whose remainder carries no version keeps its brand', () => {
+  // 去掉品牌只剩通用词，认不出是谁——护栏保留原名。
+  assert.equal(compactModelName('DeepSeek-Flash'), 'DeepSeek-Flash')
+  assert.equal(compactModelName('Claude-Haiku'), 'Claude-Haiku')
+})
+
+test('GPT drops its prefix but Step keeps it', () => {
+  // GPT 后面跟的是 6.1 / 6 这类版本号，加代号本身认得出；
+  // Step-5-Preview 削成 5-Preview 只剩通用词，因此整类保留。
+  assert.equal(compactModelName('GPT-6 Astra'), '6 Astra')
+  assert.equal(compactModelName('GPT-6.1 Sol'), '6.1 Sol')
+  assert.equal(compactModelName('gpt-6.1 sol'), '6.1 sol', 'upstream casing varies')
+  assert.equal(compactModelName('Step-5-Preview'), 'Step-5-Preview')
+})
+
+test('names with no known brand prefix are left exactly as they are', () => {
+  assert.equal(compactModelName('Beam Free'), 'Beam Free')
+  assert.equal(compactModelName('M3'), 'M3')
+  assert.equal(compactModelName('M3.1-Flash（订阅限免）'), 'M3.1-Flash（订阅限免）')
+  assert.equal(compactModelName('dsh-opencode-go'), 'dsh-opencode-go')
+})
+
+test('the brand only strips at the start, never inside a name', () => {
+  assert.equal(compactModelName('Qwen3.8-Flash'), '3.8-Flash')
+  assert.equal(compactModelName('MiMo-V2.6-Flash Free'), 'V2.6-Flash Free')
+  assert.equal(compactModelName('Step-Qwen4'), 'Step-Qwen4', 'an inner brand is not a prefix')
 })

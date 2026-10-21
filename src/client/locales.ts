@@ -34,6 +34,8 @@ export type SettingsKey =
   | 'overridden' | 'reset' | 'invalid'
   | 'addressLabel' | 'addressHint' | 'addressPlaceholder' | 'addressHelpLabel'
   | 'addressHelpAutomatic' | 'addressHelpWhenToFill'
+  | 'compactNamesLabel' | 'compactNamesHint' | 'compactNamesPlaceholder' | 'compactNamesHelpLabel'
+  | 'compactNamesHelpOn' | 'compactNamesHelpOff' | 'compactNamesInvalid'
 
 /** English copy for the settings page. */
 export const settingsEn: Record<SettingsKey, string> = {
@@ -51,6 +53,13 @@ export const settingsEn: Record<SettingsKey, string> = {
   addressHelpLabel: 'About the fallback Magpie base URL',
   addressHelpAutomatic: 'Detected automatically by default: when the DeepSeek request uses Magpie credentials and points at this machine\'s /v1 endpoint, the model and favourite sources are labelled Magpie. Removing that route restores the original provider.',
   addressHelpWhenToFill: 'Only fill this in when a custom setup is not detected. The address must start with http:// or https://, without credentials, query parameters or fragments. Refresh the interface after switching routes.',
+  compactNamesLabel: 'Shorten model names',
+  compactNamesHint: 'Usually left as on: the model entry reads V4.1-Flash instead of DeepSeek-V4.1-Flash. Type off to show the full upstream name.',
+  compactNamesPlaceholder: 'on or off',
+  compactNamesHelpLabel: 'About shortening model names',
+  compactNamesHelpOn: 'On (default) drops a redundant brand prefix from the model entry, so a narrower entry leaves more room for the input. The model list, search matching and every request keep the upstream name.',
+  compactNamesHelpOff: 'Off shows the full upstream name on the model entry, exactly as the provider reports it.',
+  compactNamesInvalid: 'Enter on or off, or clear the field to use the default.',
 }
 
 /** Simplified Chinese copy for the settings page. */
@@ -69,6 +78,13 @@ export const settingsZh: Record<SettingsKey, string> = {
   addressHelpLabel: '备用 Magpie 接口地址说明',
   addressHelpAutomatic: '默认自动识别：请求使用 Magpie 凭据、且地址为本机的 /v1 接口时，模型与收藏来源显示为 Magpie；撤掉路由后恢复原供应商。',
   addressHelpWhenToFill: '只有自定义接入未被识别时才需要填写。地址须以 http:// 或 https:// 开头，不含账号密码、查询参数或片段。切换路由后刷新界面。',
+  compactNamesLabel: '模型名精简',
+  compactNamesHint: '通常保持 on：模型入口显示 V4.1-Flash，而不是 DeepSeek-V4.1-Flash。填 off 显示完整上游名。',
+  compactNamesPlaceholder: 'on 或 off',
+  compactNamesHelpLabel: '模型名精简说明',
+  compactNamesHelpOn: 'on（默认）去掉模型入口上多余的品牌前缀，入口更窄，留更多空间给输入框。模型列表、搜索匹配与所有请求都仍用上游原名。',
+  compactNamesHelpOff: 'off 时模型入口显示完整上游名，与提供方上报的名称完全一致。',
+  compactNamesInvalid: '填写 on 或 off，或清空此字段使用默认值。',
 }
 
 /** Picker-panel locale keys. */
@@ -77,8 +93,9 @@ export type PickerKey =
   | 'dialogLabel' | 'providerRailLabel' | 'favoritesLabel' | 'favoriteAdd' | 'favoriteRemove'
   | 'providerReorderHint' | 'effortLabel'
   | 'emptyFavorites' | 'emptyNoMatch' | 'loadingCatalog' | 'loadFailed' | 'emptyProvider' | 'emptyCatalog'
-  | 'partialProviders' | 'effortUnsupported'
+  | 'partialProviders' | 'effortUnsupported' | 'retry' | 'providerLoadFailed'
   | 'modelFallback' | 'switchFailed' | 'triggerAria' | 'triggerAriaEffort'
+  | 'effortOff' | 'effortMinimal' | 'effortLow' | 'effortMedium' | 'effortHigh' | 'effortXHigh' | 'effortMax'
 
 /** English copy for the picker panel. */
 export const pickerEn: Record<PickerKey, string> = {
@@ -100,11 +117,20 @@ export const pickerEn: Record<PickerKey, string> = {
   emptyProvider: 'This provider lists no models.',
   emptyCatalog: 'No models available. Check the provider configuration.',
   partialProviders: 'Some providers\u2019 models could not be loaded. Check the provider configuration.',
+  retry: 'Retry',
+  providerLoadFailed: '{name}: {message}',
   effortUnsupported: 'This model does not support effort settings',
   modelFallback: 'Model',
   switchFailed: 'Could not switch the model or the effort. Try again.',
   triggerAria: 'Choose a model, currently {model}',
   triggerAriaEffort: 'Choose a model, currently {model}, reasoning effort {effort}',
+  effortOff: 'Off',
+  effortMinimal: 'Minimal',
+  effortLow: 'Low',
+  effortMedium: 'Medium',
+  effortHigh: 'High',
+  effortXHigh: 'Extra high',
+  effortMax: 'Max',
 }
 
 /** Simplified Chinese copy for the picker panel. */
@@ -127,9 +153,18 @@ export const pickerZh: Record<PickerKey, string> = {
   emptyProvider: '该提供方暂未公布模型。',
   emptyCatalog: '暂无可用模型，请检查提供方配置。',
   partialProviders: '部分提供方的模型未能加载，请检查提供方配置。',
+  retry: '重试',
+  providerLoadFailed: '{name}：{message}',
   effortUnsupported: '当前模型不支持调节',
   modelFallback: '模型',
   switchFailed: '模型或档位切换失败，请重试。',
   triggerAria: '选择模型，当前 {model}',
   triggerAriaEffort: '选择模型，当前 {model}，思考深度 {effort}',
+  effortOff: '关闭',
+  effortMinimal: '极低',
+  effortLow: '低',
+  effortMedium: '中',
+  effortHigh: '高',
+  effortXHigh: '超高',
+  effortMax: '最高',
 }
