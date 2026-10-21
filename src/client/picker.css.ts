@@ -136,6 +136,20 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   overflow: hidden !important;
 }
 
+/* 折叠最末一级：连模型名一起收掉，只留 logo + 竖条。
+   为什么不是让它继续省略号：宽度只够一个字符时，屏幕上是「V.…」——读不出
+   任何信息，却仍占着比图标更宽的位置，看起来像坏了。ZCode 在同一宽度下也
+   是整个收起模型名。要么读得出来，要么不显示，不留半截。 */
+.dsh003-picker-btn[data-compact-label="true"] .dsh003-picker-btn-label {
+  position: absolute !important;
+  left: 0 !important;
+  bottom: 0 !important;
+  width: 0 !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
 /* 折叠第二级：档位文字淡出、竖条淡入。
    同样没有阈值——箭头收掉后仍放不下才轮到这一级（JS 实测）。
    这里只负责「让位长什么样」。

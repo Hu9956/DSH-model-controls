@@ -38,7 +38,10 @@ function decide(available, parts) {
   const tail = showMeter ? meter : (hasEffort ? effort : 0)
   const neededWithChevron = base + gap * 3 + tail + chevron + MIN_LABEL_ROOM
   const compactChevron = neededWithChevron > available
-  if (showMeter) return 2
+  // 模型名还分不到一个字宽时整个收起，不留「V.…」这种半截。
+  const labelRoom = available - base - gap * 2 - tail
+  const compactLabel = labelRoom < MIN_LABEL_ROOM
+  if (showMeter) return compactLabel ? 3 : 2
   if (compactChevron) return 1
   return 0
 }
@@ -52,6 +55,7 @@ test('the effort word yields at the breakpoint, long before it runs out of room'
   // 这是本次修正的核心：ZCode 在按钮还有一百多像素时就换竖条，
   // 而不是等到模型名被省略号吃光。150px 断点是分水岭。
   for (const effort of REAL_EFFORT_WIDTHS) {
+    // 149px 时模型名还分得到宽度（不会只剩半截），所以停在「竖条」这一级。
     assert.equal(decide(149, parts(effort)), 2, 'below the breakpoint the word is gone and the meter shows')
     // 断点之上必须能完整显示（含箭头），否则刚回到文字态就又放不下——
     // 那正是抖动的来源。所以断点必须 ≥ 最宽真实档位所需的 128px。
@@ -78,11 +82,11 @@ test('the meter takes over exactly once, and widening undoes it exactly', () => 
     const up = []
     for (let available = 20; available <= 400; available += 1) up.push(decide(available, parts(effort)))
     assert.deepEqual(up, [...down].reverse(), `effort ${effort}: widening must undo narrowing exactly`)
-    // 层级序列里 2 只应出现一段连续区间。
-    const twos = down.filter(level => level === 2).length
-    const firstTwo = down.indexOf(2)
-    assert.ok(down.slice(firstTwo).every(level => level === 2),
-      `effort ${effort}: the meter level must be one contiguous band, got ${twos} entries`)
+    // 「竖条已显示」的价格（2 与 3）必须是一段连续区间，中间不能夹回文字态。
+    const firstMeter = down.findIndex(level => level >= 2)
+    assert.ok(firstMeter >= 0, `effort ${effort}: the meter must be reached at some width`)
+    assert.ok(down.slice(firstMeter).every(level => level >= 2),
+      `effort ${effort}: once the meter shows it must stay, got ${down.slice(firstMeter).join('')}`)
   }
 })
 
@@ -124,4 +128,33 @@ test('the chevron collapses only when even the meter no longer fits', () => {
   const fitsWithChevron = p.padding + p.logo + p.gap * 3 + p.meter + p.chevron + MIN_LABEL_ROOM
   assert.equal(decide(fitsWithChevron, p), 2, 'at exactly enough room the chevron stays')
   assert.equal(decide(fitsWithChevron - 1, p), 2, 'level stays 2 either way: the word is already gone')
+})
+
+test('the model name is dropped whole rather than left as one character plus an ellipsis', () => {
+  // 只有约一个字符宽时，屏幕上是「V.…」——读不出信息，还比图标宽。
+  // 这种宽度下必须整个收起，只留 logo + 竖条（对应 ZCode 的 model-icon 状态）。
+  const p = parts(62)
+  // 找到「模型名分到的宽度 < 一个字宽」的第一个位置。
+  let dropped = null
+  for (let available = 400; available >= 20; available -= 0.5) {
+    const labelRoom = available - p.padding - p.logo - p.gap * 2 - p.meter
+    if (labelRoom < MIN_LABEL_ROOM) { dropped = available; break }
+  }
+  assert.ok(dropped !== null, 'the sweep must reach the drop point')
+  assert.equal(decide(dropped, p), 3, 'at and below this width the model name goes entirely')
+  assert.equal(decide(dropped + 1, p), 2, 'just above it the name still shows')
+})
+
+test('dropping the model name never makes it come back', () => {
+  // 收掉模型名会空出一段宽度；若判据用了「模型名当前宽度」，就会翻回去。
+  // 这里断言从宽到窄扫一遍，级别只增不减，绝不出现 3 → 2 的回退。
+  for (const effort of REAL_EFFORT_WIDTHS) {
+    let previous = 0
+    for (let available = 400; available >= 20; available -= 0.5) {
+      const level = decide(available, parts(effort))
+      assert.ok(level >= previous,
+        `effort ${effort}: level dropped from ${previous} to ${level} at ${available}px`)
+      previous = level
+    }
+  }
 })

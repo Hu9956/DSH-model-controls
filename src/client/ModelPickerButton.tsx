@@ -216,6 +216,7 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
         data-open={open ? 'true' : 'false'}
         data-meter={showEffortMeter ? 'true' : 'false'}
         data-compact-chev={collapse.compactChevron ? 'true' : 'false'}
+        data-compact-label={collapse.compactLabel ? 'true' : 'false'}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={buttonEffortName === null

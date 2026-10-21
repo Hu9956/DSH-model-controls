@@ -144,3 +144,12 @@ test('the retry button is a real, focusable control', () => {
   // 失败行本身要能横排放下「原因 + 重试」。
   assert.match(rule('dsh003-picker-notice'), /display: flex/)
 })
+
+test('a model name too narrow to read is dropped whole, not truncated to one letter', () => {
+  // 只够一个字符时屏幕上是「V.…」：读不出信息，还比图标宽，看起来像坏了。
+  const drop = /data-compact-label="true"\] \.dsh003-picker-btn-label \{([\s\S]*?)\n\}/.exec(css)?.[1]
+  assert.ok(drop !== undefined, 'the label must have a whole-drop state')
+  assert.match(drop, /opacity: 0/)
+  assert.match(drop, /position: absolute/, 'out of flow, so it stops widening the button')
+  assert.ok(!/display: none/.test(drop), 'display:none cannot be transitioned')
+})

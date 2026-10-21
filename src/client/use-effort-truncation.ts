@@ -74,6 +74,16 @@ export interface ButtonCollapse {
   compactChevron: boolean
   /** 档位文字换成竖条：箭头收掉后仍放不下才发生。 */
   showMeter: boolean
+  /**
+   * 连模型名一起收掉，只留 logo + 竖条。
+   *
+   * 为什么要有这一级：模型名用省略号收缩，宽度不够时最后会只剩一个字符加
+   * 省略号（`V.…`）。那不是「信息变少」，而是「看起来像坏了」——一个孤零零
+   * 的字母加省略号读不出任何东西，还把按钮撑得比图标宽。ZCode 在同一宽度下
+   * 直接整个收起模型名（`data-composer-model-icon`），这里照做：要么读得出来，
+   * 要么不显示，不留半截。
+   */
+  compactLabel: boolean
 }
 
 /** 四个恒定存在的量宽探针；都绝对定位、从不显隐。 */
@@ -151,7 +161,11 @@ export function useButtonCollapse(
   hasEffort: boolean,
   deps: readonly unknown[],
 ): ButtonCollapse {
-  const [collapse, setCollapse] = React.useState<ButtonCollapse>({ compactChevron: false, showMeter: false })
+  const [collapse, setCollapse] = React.useState<ButtonCollapse>({
+    compactChevron: false,
+    showMeter: false,
+    compactLabel: false,
+  })
 
   React.useEffect(() => {
     let row: HTMLElement | null = null
@@ -191,10 +205,20 @@ export function useButtonCollapse(
       const tail = showMeter ? (meterWidth ?? 0) : effortWidth
       // 间距：logo | 模型名 | 档位(或竖条) | 箭头 → 3 个
       const neededWithChevron = base + gap * 3 + tail + chevron + MIN_LABEL_ROOM
-      setCollapse({
-        compactChevron: neededWithChevron > available,
-        showMeter,
-      })
+      const compactChevron = neededWithChevron > available
+
+      // 判据三：模型名还分不到一个字宽时整个收起。
+      // 否则会留下 `V.…` 这样的半截——读不出信息，却仍占着比图标更宽的位置。
+      //
+      // 判据用的是「模型名若显示能分到多少」，不依赖它当前是否显示：
+      // 减去的是固定占位与档位项，与模型名自身宽度无关。因此收掉模型名之后
+      // 这个值不会变大，不可能反过来判定「又能显示了」——不会自激。
+      // 间距按「logo | 模型名 | 档位(或竖条) | 箭头」中的**三项**算，
+      // 这样收掉箭头与否都得到同一个门槛。
+      const labelRoom = available - base - gap * 2 - tail
+      const compactLabel = labelRoom < MIN_LABEL_ROOM
+
+      setCollapse({ compactChevron, showMeter, compactLabel })
     }
 
     measure()

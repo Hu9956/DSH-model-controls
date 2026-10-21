@@ -440,6 +440,40 @@ test('the chevron stays while the effort word and model name have room', async (
   } finally { restore() }
 })
 
+test('at the narrowest width the model name is dropped instead of left half-cut', async () => {
+  // 按钮可用宽度只够 logo + 竖条：模型名必须整个收起，不能留下「V.…」。
+  const restore = stubLayout({ available: 40, effort: 26 })
+  try {
+    const f = fixture()
+    f.publish({
+      current: { provider: 'p', model: 'a', reasoningEffort: 'high' },
+      groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'V4.1 Flash Free',
+        reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'low' } }] }],
+    })
+    await render(f.directory)
+    await action(() => {})
+    const trigger = query('.dsh003-picker-btn')
+    assert.equal(trigger.getAttribute('data-compact-label'), 'true', 'the name goes away entirely')
+    assert.equal(trigger.getAttribute('data-meter'), 'true', 'the meter stays: it still carries information')
+  } finally { restore() }
+})
+
+test('the model name survives while it still has room to read', async () => {
+  // 只要还分得到一个字宽以上，就必须保留模型名——那是「在用哪个模型」的唯一线索。
+  const restore = stubLayout({ available: 120, effort: 26 })
+  try {
+    const f = fixture()
+    f.publish({
+      current: { provider: 'p', model: 'a', reasoningEffort: 'high' },
+      groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'V4.1 Flash Free',
+        reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'low' } }] }],
+    })
+    await render(f.directory)
+    await action(() => {})
+    assert.equal(query('.dsh003-picker-btn').getAttribute('data-compact-label'), 'false')
+  } finally { restore() }
+})
+
 test('the measured width is written to the button so the row never wraps', async () => {
   const restore = stubLayout({ available: 260, effort: 26 })
   try {
