@@ -8,6 +8,8 @@
 
 面板一次做完四件事：搜索模型、按供应商切换、收藏常用模型（左侧星标），以及**为当前模型单独调思考深度**——底部的思考深度滑杆按模型各自记住档位，换模型再回来还是上次那个值。
 
+模型入口默认显示精简名：`DeepSeek-V4.1-Flash` 显示为 `V4.1-Flash`，`claude-sonnet-5` 显示为 `sonnet-5`。去掉的只是冗余品牌前缀，路由来源（`· routing group` 这类）原样保留，模型列表、搜索与请求都用上游原名。不想要精简名时，在插件设置里把 **模型名精简** 填成 `off`。
+
 ## 安装
 
 1. 到 [Releases](https://github.com/Hu9956/DSH-model-controls/releases) 下载最新的 `kewen-dsh-model-controls-<版本>.tgz`。

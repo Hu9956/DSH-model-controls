@@ -8,9 +8,23 @@ export const Config = z.object({
     .description('备用 Magpie 接口地址')
     .comment('通常无需填写。默认根据 Magpie 写入的运行配置自动识别；仅自定义接入未被识别时填写。切换路由后刷新界面。')
     .volatile(),
-  // Retain installed configurations while exposing only the new field in the settings form.
+  // The official settings form offers text, number and secret controls only, so this
+  // preference is a text field accepting `on` / `off` rather than a switch.
+  compactModelNames: z.string()
+    .pattern(/^(?:|on|off)$/)
+    .default('on')
+    .description('模型名精简')
+    .comment('通常保持 on。on 时模型入口显示 V4.1-Flash 这类短名；off 时显示完整上游名（如 DeepSeek-V4.1-Flash）。只影响模型入口的显示，模型列表、搜索与请求都不变。')
+    .volatile(),
+  // Retain installed configurations while exposing only the new fields in the settings form.
   displayProviders: z.any().hidden(),
 })
+
+/** Whether the model entry shortens its model name; absent or unrecognized means on. */
+function compactNamesSetting(value) {
+  const text = typeof value?.get === 'function' ? value.get() : value
+  return text !== 'off'
+}
 
 /** Normalize an explicitly configured endpoint, without guessing from model names. */
 function endpoint(value) {
@@ -56,7 +70,9 @@ function readDeepSeekRoute(ctx) {
 /** Host half: publish presentation identities only while their endpoint condition matches. */
 export function apply(ctx, config = {}) {
   const providers = config.displayProviders
-  if (config.magpieBaseURL === undefined && (providers === undefined || providers === null || typeof providers !== 'object' || Array.isArray(providers))) return
+  if (config.magpieBaseURL === undefined
+    && config.compactModelNames === undefined
+    && (providers === undefined || providers === null || typeof providers !== 'object' || Array.isArray(providers))) return
   ctx.on('webserver/index-inject', table => {
     if (ctx.fiber?.entry) table.push({ kind: 'global', name: '__DSH_MODEL_CONTROLS_NAMESPACE__', value: ctx.fiber.entry.options.id })
     // Recompute on every page load: removing a router patch must remove its display identity too.
@@ -82,5 +98,12 @@ export function apply(ctx, config = {}) {
       }
     }
     table.push({ kind: 'global', name: '__DSH_MODEL_PICKER_DISPLAY_PROVIDERS__', value: displayProviders })
+    // Presentation-only preference: the client reads it once per page load. Pushed last so the
+    // display identity stays the first row this table has always carried.
+    table.push({
+      kind: 'global',
+      name: '__DSH_MODEL_CONTROLS_COMPACT_NAMES__',
+      value: compactNamesSetting(config.compactModelNames),
+    })
   })
 }
