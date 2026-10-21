@@ -7,11 +7,14 @@ export interface CatalogModelSnapshot { id: string; name: string; reasoning?: Ca
 export interface CatalogGroupSnapshot { id: string; name: string; models: ReadonlyArray<CatalogModelSnapshot> }
 export interface ModelSelection { provider: string; model: string; reasoningEffort?: string }
 export type CatalogStatus = 'idle' | 'loading' | 'ready' | 'error'
+/** 单个提供方加载失败：`id` 与 `name` 标识它，`message` 是宿主给的原因。 */
+export interface CatalogFailure { id: string; name?: string; message: string }
+
 export interface DirectoryState {
   current: ModelSelection | null
   pending: ModelSelection | null
   groups: ReadonlyArray<CatalogGroupSnapshot>
-  failures: ReadonlyArray<unknown>
+  failures: ReadonlyArray<CatalogFailure>
   status: CatalogStatus | 'selecting'
   error: string | null
 }
@@ -23,6 +26,8 @@ export interface ModelDirectoryFace {
 }
 export interface CatalogState {
   status: CatalogStatus
+  /** 加载失败的提供方，用于逐项显示原因并提供重试。 */
+  failures: ReadonlyArray<CatalogFailure>
   partial: boolean
   groups: ReadonlyArray<CatalogGroupSnapshot>
   default: ModelSelection | null
@@ -79,6 +84,7 @@ export function createCatalogAdapter(directory: ModelDirectoryFace) {
         source = next
         snapshot = {
           status: next.groups.length > 0 ? 'ready' : next.status === 'selecting' ? 'ready' : next.status,
+          failures: next.failures,
           partial: next.failures.length > 0,
           groups: next.groups,
           default: next.pending ?? next.current,

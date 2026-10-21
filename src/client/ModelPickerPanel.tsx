@@ -11,6 +11,7 @@ import { MenuSurface, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 
 import { favoriteKeyOf, getFavoriteSet, subscribeFavorites, toggleFavorite } from './picker-data'
 import { isMagpieRoute, magpieGatewayLabel, splitMagpieModelName } from './magpie-display'
+import { effortKeyOf } from './effort-labels'
 import { ProviderLogo } from './provider-logos'
 import { displayProviderIcon, displayProviderName } from './display-identity'
 import { searchPlaceholder } from './search-placeholder'
@@ -132,6 +133,10 @@ export function ModelPickerPanel(props: {
   containerStyle?: React.CSSProperties
   onPick(providerId: string, modelId: string): void
   partial?: boolean
+  /** 加载失败的提供方，逐项显示原因并提供重试。 */
+  failures?: ReadonlyArray<{ id: string; name?: string; message: string }>
+  /** 重新加载目录；失败行与加载失败都会用到。 */
+  onReload?(): void
   pending?: boolean
   error?: string | null
   onSelectEffort?(effortId: string): void
@@ -275,8 +280,12 @@ export function ModelPickerPanel(props: {
 
   const displayedEffortName = React.useMemo(() => {
     if (!efforts || efforts.length === 0) return ''
-    return efforts[liveIndex]?.name ?? ''
-  }, [efforts, liveIndex])
+    const level = efforts[liveIndex]
+    if (level === undefined) return ''
+    // 档位名由宿主提供（通常英文）；这里跟随界面语言，与按钮显示保持一致。
+    const key = effortKeyOf(level.name)
+    return key === undefined ? level.name : t(key)
+  }, [efforts, liveIndex, t])
 
   const commitEffort = (): void => {
     if (!keyboardPreviewRef.current) return
@@ -541,8 +550,36 @@ export function ModelPickerPanel(props: {
           </div>
         </div>
       </div>
-      {props.partial && <p className="dsh003-picker-notice" role="status">{t('partialProviders')}</p>}
-      {props.error && <p className="dsh003-picker-empty" role="alert">{props.error}</p>}
+      {/* 逐个提供方给出失败原因 + 重试。只显示一句「部分提供方加载失败」会让用户
+          不知道该去改哪个配置；宿主其实已经在 failures 里给了 id / name / message。
+          交互照官方 ModelSelect：同样的 retry 按钮、同样的位置（列表下方）。 */}
+      {(props.failures ?? []).map(failure => (
+        <p key={failure.id} className="dsh003-picker-notice" role="status">
+          <span>{format(t('providerLoadFailed'), {
+            name: failure.name ?? failure.id,
+            message: failure.message,
+          })}</span>
+          {props.onReload && (
+            <button type="button" className="dsh003-picker-retry" onClick={props.onReload}>
+              {t('retry')}
+            </button>
+          )}
+        </p>
+      ))}
+      {props.partial && (props.failures ?? []).length === 0 && (
+        <p className="dsh003-picker-notice" role="status">{t('partialProviders')}</p>
+      )}
+      {/* 整个目录加载失败：给可点的重试，而不是让用户关掉面板重开。 */}
+      {props.error && (
+        <p className="dsh003-picker-empty" role="alert">
+          <span>{props.error}</span>
+          {props.onReload && (
+            <button type="button" className="dsh003-picker-retry" onClick={props.onReload}>
+              {t('retry')}
+            </button>
+          )}
+        </p>
+      )}
       <div className={`dsh003-picker-foot ${hasEfforts ? '' : 'dsh003-picker-foot-disabled'}`}>
         {hasEfforts ? (
           <div className="dsh003-picker-foot-inner">
@@ -591,7 +628,7 @@ export function ModelPickerPanel(props: {
                     style={{
                       left: `calc(8px + (100% - 16px) * ${tickRatio})`,
                     }}
-                    title={level.description ?? level.name}
+                    title={level.description ?? (effortKeyOf(level.name) === undefined ? level.name : t(effortKeyOf(level.name)!))}
                   />
                 )
               })}

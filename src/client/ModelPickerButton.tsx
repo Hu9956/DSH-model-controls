@@ -9,6 +9,10 @@ import { pickerPosition } from './picker-position'
 import { ProviderLogo } from './provider-logos'
 import { displayProviderIcon } from './display-identity'
 import { createCatalogAdapter, type ModelDirectoryFace } from './model-catalog'
+import { compactModelName, isMagpieRoute, splitMagpieModelName } from './magpie-display'
+import { compactNamesEnabled } from './compact-names'
+import { effortKeyOf, effortProgress } from './effort-labels'
+import { useButtonCollapse } from './use-effort-truncation'
 import { format, pickerZh, type PickerKey, type Translate } from './locales'
 
 /** 未注入语言服务时的兜底（测试或无 locale 的宿主）。 */
@@ -131,9 +135,56 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
     return effort?.name ?? effectiveEffort
   }, [catalog, currentModel])
 
-  const triggerLabel = currentEffortName !== null
-    ? `${currentModelName ?? t('modelFallback')} · ${currentEffortName}`
-    : (currentModelName ?? t('modelFallback'))
+  /** 按钮显示的模型名：开关关闭时用完整上游名；开启时只压缩模型那一段，
+   * `· 路由来源` 原样保留（供应商不改）。Magpie 的显示名是「模型 · 路由来源」，
+   * 先拆开再压模型名，否则品牌词不在串首、压不到。 */
+  const buttonModelName = React.useMemo(() => {
+    if (currentModelName === null) return null
+    if (!compactNamesEnabled()) return currentModelName
+    const split = isMagpieRoute(catalog.default?.provider ?? '')
+      ? splitMagpieModelName(currentModelName)
+      : null
+    if (split === null) return compactModelName(currentModelName)
+    return `${compactModelName(split.model)} \u00b7 ${split.route}`
+  }, [catalog.default?.provider, currentModelName])
+
+  /** 按钮显示的档位：跟随界面语言（中文「高」/ 英文 `High`），未收录的原样显示。 */
+  const buttonEffortName = React.useMemo(() => {
+    if (currentEffortName === null) return null
+    const key = effortKeyOf(currentEffortName)
+    return key === undefined ? currentEffortName : t(key)
+  }, [currentEffortName, t])
+
+  /** 竖条填充比例：档位文字被截断时替代它显示。没有档位的模型不渲染竖条。 */
+  const buttonEffortProgress = React.useMemo(() => {
+    const reasoning = currentModel?.reasoning
+    const effort = catalog.default?.reasoningEffort ?? reasoning?.defaultEffort
+    if (reasoning === undefined || reasoning.efforts.length <= 1) return null
+    return effortProgress(reasoning.efforts.map(e => e.id), effort)
+  }, [catalog.default?.reasoningEffort, currentModel])
+
+  /** 折叠判定：按实测溢出量决定收箭头 / 换竖条，详见 use-effort-truncation.ts。 */
+  const logoProbeRef = React.useRef<HTMLSpanElement | null>(null)
+  const effortProbeRef = React.useRef<HTMLSpanElement | null>(null)
+  const chevronProbeRef = React.useRef<HTMLSpanElement | null>(null)
+  const meterProbeRef = React.useRef<HTMLSpanElement | null>(null)
+  const collapse = useButtonCollapse(
+    buttonRef,
+    {
+      logo: logoProbeRef,
+      effort: effortProbeRef,
+      chevron: chevronProbeRef,
+      meter: meterProbeRef,
+    },
+    buttonEffortName !== null,
+    [buttonEffortName, buttonModelName, buttonEffortProgress],
+  )
+  const showEffortMeter = buttonEffortProgress !== null && collapse.showMeter
+
+  /** 悬停提示保留完整信息：上游全名 + 档位，不跟按钮一起压缩。 */
+  const buttonTitle = currentEffortName === null
+    ? (currentModelName ?? t('modelFallback'))
+    : `${currentModelName ?? t('modelFallback')} · ${currentEffortName}`
 
   const pick = (providerId: string, modelId: string): void => {
     // no-op 语义：重复提交会把思考强度重置为模型默认（上游 route 变更清 effort 语义的同源风险）
@@ -153,21 +204,50 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
         type="button"
         className="dsh003-picker-btn"
         data-open={open ? 'true' : 'false'}
+        data-meter={showEffortMeter ? 'true' : 'false'}
+        data-compact-chev={collapse.compactChevron ? 'true' : 'false'}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={currentEffortName === null
-          ? format(t('triggerAria'), { model: currentModelName ?? t('modelFallback') })
-          : format(t('triggerAriaEffort'), { model: currentModelName ?? t('modelFallback'), effort: currentEffortName })}
-        title={triggerLabel}
+        aria-label={buttonEffortName === null
+          ? format(t('triggerAria'), { model: buttonModelName ?? t('modelFallback') })
+          : format(t('triggerAriaEffort'), { model: buttonModelName ?? t('modelFallback'), effort: buttonEffortName })}
+        title={buttonTitle}
         disabled={locked}
         onClick={toggle}
       >
         {currentGroup !== undefined && (
           <ProviderLogo {...displayProviderIcon(currentGroup)} small />
         )}
-        <span className="dsh003-picker-btn-label">{currentModelName ?? t('modelFallback')}</span>
-        {currentEffortName !== null && (
-          <span className="dsh003-picker-btn-effort">{currentEffortName}</span>
+        <span className="dsh003-picker-btn-label">{buttonModelName ?? t('modelFallback')}</span>
+        {buttonEffortName !== null && (
+          <span className="dsh003-picker-btn-effort">{buttonEffortName}</span>
+        )}
+        {/* 量宽探针：按真实内容排版（宽度可读），但绝对定位、从不参与折叠，
+            所以测量结果与当前渲染状态无关——这是 0.2.19 抖动的根治方式。
+            外层是 0 尺寸裁剪框，避免探针伸出按钮撑出横向滚动。 */}
+        <span className="dsh003-picker-probes" aria-hidden="true">
+          <span ref={logoProbeRef} className="dsh003-picker-probe dsh003-picker-logo-probe" />
+          {buttonEffortName !== null && (
+            <span ref={effortProbeRef} className="dsh003-picker-probe">{buttonEffortName}</span>
+          )}
+          <span ref={chevronProbeRef} className="dsh003-picker-probe dsh003-picker-chev-probe">
+            <IconChevronDownOutlineRegular />
+          </span>
+          <span ref={meterProbeRef} className="dsh003-picker-probe dsh003-picker-meter-probe" />
+        </span>
+        {showEffortMeter && (
+          <span
+            className="dsh003-picker-effort-meter"
+            role="img"
+            aria-label={buttonEffortName ?? ''}
+            data-empty={buttonEffortProgress === 0 ? 'true' : undefined}
+            data-progress={buttonEffortProgress}
+          >
+            <span
+              className="dsh003-picker-effort-meter-fill"
+              style={{ height: `${buttonEffortProgress * 100}%` }}
+            />
+          </span>
         )}
         <IconChevronDownOutlineRegular className="dsh003-picker-chev" />
       </button>
@@ -178,6 +258,8 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
           error={selectionError ?? catalog.error}
           catalogStatus={catalog.status}
           partial={catalog.partial}
+          failures={catalog.failures}
+          onReload={adapter.load}
           providers={catalog.groups}
           current={catalog.default}
           containerStyle={pos}

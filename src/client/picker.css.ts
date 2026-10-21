@@ -1,12 +1,9 @@
 /**
- * M2-005a 模型选择器样式（settings 自绘家族同语言：--dsw-alias-* 语义色 + --dshT3-* 圆角，
- * 深色模式零特判）。挂载方式同 pluginCardsCss：layout-guard 注入独立 style 标签。
- * M-049：① 区触发按钮重写为官方模型触发器 chrome（ModelSelect.module.css .trigger 逐值
- * 对齐），新增组合容器类；②-⑥ 区面板浮层样式零改动。
- * 结构：① 触发按钮（M-049 官方对齐） ② 面板浮层（自适应高 + subtle enter） ③ 两栏主体（左栏收藏/短线/提供方，
- * 右栏搜索框/模型列表，gutter 统一 8px） ④ 模型行 ⑤ 底部占位。
+ * 模型选择器样式（--dsw-alias-* 语义色 + --dshT3-* 圆角，深色模式零特判）。
+ * 结构：① 触发按钮 ② 面板浮层 ③ 两栏主体 ④ 模型行 ⑤ 底部占位。
  */
 export const pickerCss = `
+
 /* ① 组合容器（M-049）：两入口横排一组，占官方模型位；min-width:0 防挤爆 trailing 行 */
 .dsh003-model-controls {
   display: flex !important;
@@ -30,8 +27,14 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   align-items: center !important;
   gap: 4px !important;
   min-width: 0 !important;
-  max-width: 220px !important;
+  /* 可用宽度由 JS 实测后写入 --dsh003-max：把 composer 那一行里除按钮以外的
+     实际宽度减掉，剩下的全给按钮。因此按钮永远不会把那一行顶成两行，
+     也不依赖任何硬编码占位（此前写的 140px 是照实测抄的，布局一改就错）。
+     45cqw 是 JS 尚未测量时的兜底，360px 是官方同款的绝对上限。 */
   max-width: min(360px, 45cqw) !important;
+  max-width: min(360px, var(--dsh003-max, 45cqw)) !important;
+  /* 两根量宽探针按此定位（绝对定位 + visibility:hidden），不参与布局。 */
+  position: relative !important;
   height: 28px !important;
   padding: 0 4px 0 8px !important;
   border: none !important;
@@ -62,27 +65,159 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   color: var(--dsw-alias-label-dimmed) !important;
   cursor: default !important;
 }
-/* 模型名：ellipsis 三件套（官方 .triggerLabel 同款）；宽度由按钮 max-width 钳制 */
+/* 档位竖条：档位文字让位时才出现（由按钮上的 data-meter 控制，见下）。
+   默认 display:none——有档位的模型都会渲染这根元素，但要到让位时才显示。
+   轨道 = 文字色 10% 透明（对齐 ZCode 的 bg-foreground/10），
+   填充从底部往上长，高度由内联 style 按档位比例给出。
+   注意：这条基础规则必须排在让位规则**之前**——同特异性同 !important，
+   后面的规则胜出，排反了会把 display:block 整个盖掉，竖条永远不出现。 */
+.dsh003-picker-effort-meter {
+  display: none !important;
+  position: relative !important;
+  flex: 0 0 auto !important;
+  /* 3px 宽 × 12px 高：比 16px 的品牌 logo 小一档。
+     logo 墨迹通常只占盒子的 80%，所以 12px 的竖条与它视觉等重，不会抢过图标。 */
+  width: 3px !important;
+  height: 12px !important;
+  overflow: hidden !important;
+  border-radius: 999px !important;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 10%, transparent) !important;
+}
+.dsh003-picker-effort-meter-fill {
+  position: absolute !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  border-radius: 999px !important;
+  background: var(--dsw-static-deepseek-400) !important;
+  transition: height 120ms ease !important;
+}
+/* 关闭思考：只有空轨道。轨道留着是为了把「有档位但已关闭」与
+   「这个模型根本没有档位」（不渲染竖条）区分开。 */
+.dsh003-picker-effort-meter[data-empty="true"] .dsh003-picker-effort-meter-fill {
+  display: none !important;
+}
+
+/* 窄容器降级：**宽度连续收缩，不设台阶**。
+ *
+ * 按钮的宽度上限只有一个连续公式（见 .dsh003-picker-btn 的 max-width），
+ * 所以窗口拖窄时不是「跳一档」，而是每一像素都在变。宽度不够时：
+ *
+ *   1. 模型名先被省略号吃掉 —— 这是 text-overflow: ellipsis 的连续收缩，
+ *      每拖窄一点就少吃一个字，不会整块消失。
+ *   2. 模型名缩到 0 后，才轮到档位文字：淡出收成 0 宽，同时竖条淡入。
+ *   3. 更窄（≤200px）时连箭头也收掉——它是唯一需要宽度阈值的元素。
+ *
+ * 为什么以前会「一大段文字突然变没有」：
+ * 旧版按容器宽度分了 300 / 240 / 200 三级 max-width 台阶（160 / 57 / 39），
+ * 还额外用 display: none 整块砍掉模型名。台阶一过按钮宽度瞬间变，文字就整段没了。
+ * 现在 max-width 连续，只有「让位」是离散的，且每一处让位都带 140ms 过渡。
+ *
+ * 为什么必须有 calc(100cqw - 140px) 这一项：
+ * 宿主 composer 行是 flex-wrap: wrap，右侧 .trailing 是 flex: 0 0 auto（拒绝收缩），
+ * tools 80 + 间距 12 + 发送 34 + 间距 8 = 134px 是行里别人占死的宽度。
+ * 按钮一旦超过「行宽 - 140」，整组就换行。这一项保证无论怎么拖都不会换行。
+ *
+ * 竖条颜色用主题的 DeepSeek 蓝（#7aaaff），与面板滑杆最高档刻度同色；不用成功绿
+ * ——绿色在 DSH 里表示运行中/成功，思考强度借这个语义会让界面自相矛盾。 */
+
+/* 折叠：由 use-effort-truncation.ts 实测溢出量后打 data 属性，
+   CSS 只负责「折叠长什么样」。**没有任何宽度阈值**——
+   箭头与档位文字是否让位取决于按钮实测放不放得下，而不是窗口多宽。
+
+   为什么箭头要负 margin 补偿：宽度归零后它仍是个 flex 项，两侧 gap 照占；
+   负 margin 把这份 gap 一起抵消，让「宽度为零」在几何上也真的等于零。 */
+
+/* 折叠第一级：收掉箭头（纯装饰，缩一半就是残图，只能整块收）。 */
+.dsh003-picker-btn[data-compact-chev="true"] .dsh003-picker-chev {
+  width: 0 !important;
+  margin-left: -4px !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
+}
+
+/* 折叠第二级：档位文字淡出、竖条淡入。
+   同样没有阈值——箭头收掉后仍放不下才轮到这一级（JS 实测）。
+   这里只负责「让位长什么样」。
+
+   用 absolute 把档位文字整个移出 flex 流：只设 width:0 仍会保留它两侧的
+   4px 间距和一个 flex 项的位置，让位就不彻底；而 display:none 又无法过渡。
+   absolute + opacity 过渡既能淡出，又立刻把宽度和间距一并交还给模型名。 */
+.dsh003-picker-btn[data-meter="true"] .dsh003-picker-btn-effort {
+  position: absolute !important;
+  left: 0 !important;
+  bottom: 0 !important;
+  width: 0 !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+.dsh003-picker-btn[data-meter="true"] .dsh003-picker-effort-meter {
+  display: block !important;
+  animation: dsh003-meter-in 140ms ease both;
+}
+
+@keyframes dsh003-meter-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 .dsh003-picker-btn-label {
+  /* 可以一路缩到 0：这是「慢慢缩进」的主体，由省略号连续表达。 */
+  flex: 1 1 auto !important;
   min-width: 0 !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
 }
-/* 思考深度：官方 caption 用色；空间不足时优先收缩并省略。 */
+/* 思考深度：官方 caption 用色。
+   flex: 0 0 auto = 不参与收缩，是按钮里最后一个让位的东西——
+   只有箭头已经收掉、按钮仍放不下它时，才由 data-meter 把它淡出成竖条。 */
 .dsh003-picker-btn-effort {
-  flex-shrink: 1000 !important;
-  min-width: 0 !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
+  flex: 0 0 auto !important;
   white-space: nowrap !important;
+  overflow: hidden !important;
   color: var(--dsw-alias-label-caption) !important;
+  transition: width 140ms ease, opacity 140ms ease !important;
 }
 /* 箭头：官方 IconChevronDownOutline14 原件（caption tone），open 态翻转（官方 .chevron 同款） */
 .dsh003-picker-chev {
   flex: 0 0 auto !important;
   color: var(--dsw-alias-label-caption) !important;
-  transition: transform 120ms ease !important;
+  transition: transform 120ms ease, width 140ms ease, opacity 140ms ease !important;
+}
+/* 量宽探针：按真实内容排版（宽度可读），但绝对定位、不可见、不可交互。
+   四根分别量 logo / 档位文字 / 箭头 / 竖条，**都从不参与折叠**，
+   所以测量结果与当前渲染状态无关——这是 0.2.19 疯狂抖动的根治方式。 */
+/* 0 尺寸裁剪框：让探针按真实宽度排版（宽度可读），同时不伸出按钮撑出横向滚动。 */
+.dsh003-picker-probes {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+.dsh003-picker-probe {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  white-space: nowrap !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  line-height: 20px !important;
+}
+/* logo 与竖条探针：尺寸必须与真实元素一致（16px logo、3px 竖条）。 */
+.dsh003-picker-logo-probe {
+  width: 16px !important;
+  height: 16px !important;
+}
+.dsh003-picker-meter-probe {
+  width: 3px !important;
+  height: 12px !important;
 }
 .dsh003-picker-btn[data-open="true"] .dsh003-picker-chev {
   transform: rotate(180deg) !important;
@@ -223,11 +358,12 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   width: 100% !important;
   height: 100% !important;
 }
-/* M-056：触发按钮 14px 小档——占位=实际渲染尺寸（SVG 随盒缩放），满幅 logo≈13px 文字高；
+/* M-056：触发按钮小档——官方触发器 IconDataOutlineRegular 用 size:16，
+   本插件原为 14（比官方小一号，与周围图标不成比例），现对齐 16。
    flex:none 防长模型名挤压图标 */
 .dsh003-provider-logo--sm {
-  width: 14px !important;
-  height: 14px !important;
+  width: 16px !important;
+  height: 16px !important;
   flex: none !important;
   display: inline-flex !important;
   align-items: center !important;
@@ -335,11 +471,38 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
 /* 目录有部分失败时保留可用列表，并用紧凑说明解释缺失的提供方。 */
 .dsh003-picker-notice {
   flex: none !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
   margin: 0 !important;
   padding: 6px 12px !important;
   font-size: 11px !important;
   line-height: 16px !important;
   color: var(--dsw-alias-label-secondary) !important;
+}
+/* 重试：失败行的就地重载入口（官方 ModelSelect 的 .retry 同语义）。
+   文字型按钮、右对齐，不抢失败原因的宽度。 */
+.dsh003-picker-retry {
+  flex: none !important;
+  margin-left: auto !important;
+  padding: 0 6px !important;
+  height: 20px !important;
+  border: none !important;
+  border-radius: var(--dshT3-radius-sm, 6px) !important;
+  background: transparent !important;
+  color: var(--dsw-alias-label-primary) !important;
+  font-size: 11px !important;
+  line-height: 20px !important;
+  cursor: pointer !important;
+  text-decoration: underline !important;
+  text-underline-offset: 2px !important;
+}
+.dsh003-picker-retry:hover {
+  background: var(--dsw-alias-interactive-bg-hover) !important;
+}
+.dsh003-picker-retry:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3) !important;
 }
 
 /* ⑤ 模型行 */
@@ -468,13 +631,19 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   width: 100% !important;
   box-sizing: border-box !important;
 }
-/* 左侧文本堆叠：上为辅助标签 11px 中灰稳重，下为当前档位 13px 500 字重平衡 */
+/* 左侧文本堆叠：上为辅助标签 11px 中灰稳重，下为当前档位 13px 500 字重平衡。
+   两行围绕列的中轴居中：档位名通常只有一两个字（中文「高」13px），
+   若左对齐会贴在列最左、右侧空出一大截，读起来像丢了半个字。
+   列宽不设 min-width，严格由标签决定——标签在所有语言下都是最宽的一行
+   （实测：中文「思考深度」44px vs 最宽值「最高」26px；英文 78px vs 最宽值 56px），
+   因此标签左缘恒为内容区起点，切换档位时滑杆也不会跳动。 */
 .dsh003-picker-foot-info {
   display: flex !important;
   flex-direction: column !important;
   justify-content: center !important;
+  align-items: center !important;
+  text-align: center !important;
   flex: 0 0 auto !important;
-  min-width: 56px !important;
   gap: 0 !important;
   user-select: none !important;
 }
@@ -491,11 +660,13 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   color: var(--dsw-alias-label-primary) !important;
   white-space: nowrap !important;
 }
-/* 不支持调节时的空态展示 */
+/* 不支持调节时的空态展示：与上面的档位堆叠保持同一中轴 */
 .dsh003-picker-slider-empty {
   display: flex !important;
   flex-direction: column !important;
   justify-content: center !important;
+  align-items: center !important;
+  text-align: center !important;
   gap: 2px !important;
   user-select: none !important;
 }
