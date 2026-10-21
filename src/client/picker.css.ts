@@ -98,18 +98,17 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   display: none !important;
 }
 
-/* 「这个模型没有档位」：按钮里只显示一个「无」字。
-   为什么不画轨道：3px 宽的轨道在 6% 透明度下根本看不见——那正是这个
-   功能要解决的问题本身（用户会以为没档位是 bug）。而「无」字已经把意思
-   说全，再叠一根看不见的轨道只是重复，还和「关闭思考」的空轨道混淆。
-   也不与面板里同名的 .dsh003-picker-effort-none（「当前模型不支持调节」）
-   共用类名：那是 12px 的整行文字，两个样式会互相覆盖。 */
-.dsh003-picker-btn-noeffort {
-  flex: 0 0 auto !important;
-  white-space: nowrap !important;
-  font-size: 12px !important;
-  line-height: 20px !important;
-  color: var(--dsw-alias-label-caption) !important;
+/* 「这个模型没有档位」的竖条形态：一根更短、更淡的轨道，不填充。
+   为什么和「关闭思考」的空轨道不同（12px/10% vs 8px/6%）：
+   两者意思不一样——「关闭」是有这个能力、此刻关掉了；「没有档位」是
+   根本没有这个能力。意思不同，外观就必须不同。
+   短一截是关键：3px 宽下长度的差别比亮度更容易分辨。
+   文字形态下它显示「无」（见 effortNoneShort），与这根轨道互斥——
+   就像「高」与正常竖条互斥一样，它们是同一个位置的两种形态。
+   垂直居中由父级 .dsh003-picker-btn 的 align-items:center 保证。 */
+.dsh003-picker-effort-meter[data-none="true"] {
+  height: 8px !important;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent) !important;
 }
 
 /* 窄容器降级：**宽度连续收缩，不设台阶**。

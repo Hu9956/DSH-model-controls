@@ -148,41 +148,54 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
     return `${compactModelName(split.model)} \u00b7 ${split.route}`
   }, [catalog.default?.provider, currentModelName])
 
-  /** 按钮显示的档位：跟随界面语言（中文「高」/ 英文 `High`），未收录的原样显示。 */
-  const buttonEffortName = React.useMemo(() => {
-    if (currentEffortName === null) return null
-    const key = effortKeyOf(currentEffortName)
-    return key === undefined ? currentEffortName : t(key)
-  }, [currentEffortName, t])
-
-  /** 竖条填充比例：档位文字被截断时替代它显示。没有档位的模型不渲染填充，
-   *  但仍渲染轨道（`data-none`），让「这个模型没有档位」可见。
-   *  用 effortMeterHeight 而不是 effortProgress：后者与面板滑杆严格同刻度
-   *  （最低档为 0），但 12px 高的竖条分不出「0」与「关闭」，所以绘制时抬到最小可见高度。 */
-  const buttonEffortProgress = React.useMemo(() => {
-    const reasoning = currentModel?.reasoning
-    const effort = catalog.default?.reasoningEffort ?? reasoning?.defaultEffort
-    if (reasoning === undefined || reasoning.efforts.length <= 1) return null
-    return effortProgress(reasoning.efforts.map(e => e.id), effort)
-  }, [catalog.default?.reasoningEffort, currentModel])
-
   /**
    * 这个模型**没有任何**思考档位（不是「关闭」，而是根本没有这个概念）。
    *
-   * 为什么需要单独一个状态：以前这种情况什么都不画，于是按钮上既不显示档位
-   * 文字、也没有竖条——和「还没加载完」长得一样。用户会以为出了 bug，
-   * 而不是意识到这个模型本来就没有档位。
+   * 必须和「还在加载」区分开：`currentModel` 为 undefined 表示目录里还没找到
+   * 这个模型，那时什么都不该画；而这里是有明确答案——它没有档位。
    */
   const hasNoEfforts = currentModel !== undefined
     && (currentModel.reasoning === undefined || currentModel.reasoning.efforts.length <= 1)
 
+  /**
+   * 按钮上档位位置的文字。
+   *
+   * 「没有档位」也走这一条管线，当作一个名叫「无」的档位——它不是特例，
+   * 只是在竖条形态下画成一根短轨道（见 `data-none`）。这样折叠判定、
+   * 宽度计算、探针测量全都只有一套逻辑，不需要为它开分支。
+   *
+   * 跟随界面语言：中文「无」/ 英文 `N/A`。
+   */
+  const buttonEffortName = React.useMemo(() => {
+    if (hasNoEfforts) return t('effortNoneShort')
+    if (currentEffortName === null) return null
+    const key = effortKeyOf(currentEffortName)
+    return key === undefined ? currentEffortName : t(key)
+  }, [hasNoEfforts, currentEffortName, t])
+
+  /**
+   * 竖条填充比例：档位文字被截断时替代它显示。
+   *
+   * 「没有档位」返回 0——它在竖条形态下画成短轨道、不填充（`data-none`）。
+   * 用 effortMeterHeight 而不是 effortProgress：后者与面板滑杆严格同刻度
+   * （最低档为 0），但 12px 高的竖条分不出「0」与「关闭」，所以绘制时抬到最小可见高度。
+   */
+  const buttonEffortProgress = React.useMemo(() => {
+    if (hasNoEfforts) return 0
+    const reasoning = currentModel?.reasoning
+    const effort = catalog.default?.reasoningEffort ?? reasoning?.defaultEffort
+    if (reasoning === undefined || reasoning.efforts.length <= 1) return null
+    return effortProgress(reasoning.efforts.map(e => e.id), effort)
+  }, [catalog.default?.reasoningEffort, currentModel, hasNoEfforts])
+
   /** 实际画出来的高度：与滑杆同刻度，但最低的有效档也看得见。 */
   const buttonMeterHeight = React.useMemo(() => {
+    if (hasNoEfforts) return 0
     const reasoning = currentModel?.reasoning
     const effort = catalog.default?.reasoningEffort ?? reasoning?.defaultEffort
     if (reasoning === undefined || reasoning.efforts.length <= 1) return null
     return effortMeterHeight(reasoning.efforts.map(e => e.id), effort)
-  }, [catalog.default?.reasoningEffort, currentModel])
+  }, [catalog.default?.reasoningEffort, currentModel, hasNoEfforts])
 
   /** 折叠判定：按实测溢出量决定收箭头 / 换竖条，详见 use-effort-truncation.ts。 */
   const logoProbeRef = React.useRef<HTMLSpanElement | null>(null)
@@ -264,15 +277,13 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
             <span ref={labelProbeRef} className="dsh003-picker-probe dsh003-picker-label-probe">{buttonModelName}</span>
           )}
         </span>
-        {hasNoEfforts && (
-          <span className="dsh003-picker-btn-noeffort" aria-hidden="true">{t('effortNoneShort')}</span>
-        )}
         {showEffortMeter && (
           <span
             className="dsh003-picker-effort-meter"
             role="img"
             aria-label={buttonEffortName ?? ''}
             data-empty={buttonMeterHeight === 0 ? 'true' : undefined}
+            data-none={hasNoEfforts ? 'true' : undefined}
             data-progress={buttonEffortProgress}
           >
             <span

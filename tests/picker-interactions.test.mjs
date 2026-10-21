@@ -592,27 +592,45 @@ test('the button never eats the whole composer row on a phone', async () => {
   } finally { restore() }
 })
 
-test('a model with no effort levels says so instead of showing nothing', async () => {
-  // 以前这种情况按钮上既不显示档位文字也没有竖条，和「还没加载完」长得一样，
-  // 用户会以为出了 bug，而不是意识到这个模型本来就没有档位。
-  // 现在必须画淡短轨道 + 一个「无」字。
-  const restore = stubLayout({ available: 400, effort: 26 })
+test('a model with no effort levels shows "无" in the word form', async () => {
+  // 「没有档位」走和普通档位同一条管线：文字形态下它就是一个名叫「无」的档位。
+  // 以前什么都不画，和「还没加载完」长得一样，用户会以为出了 bug。
+  const restore = stubLayout({ available: 400, effort: 26, label: 4 })
   try {
     const f = fixture()
     f.publish({
       current: { provider: 'p', model: 'a' },
-      groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'Model a' }] }],
+      groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'Opus-5' }] }],
     })
     await render(f.directory)
     await action(() => {})
-    const none = query('.dsh003-picker-btn-noeffort')
-    assert.ok(none !== null, 'a model with no levels must announce that, not stay silent')
-    assert.equal(none.textContent, '无')
-    // 不能和有档位的竖条同时出现——那是两个互相矛盾的信号。
+    const effort = query('.dsh003-picker-btn-effort')
+    assert.ok(effort !== null, 'a model with no levels must still fill the effort slot')
+    assert.equal(effort.textContent, '无')
+    // 文字形态下不该有竖条——它们互斥，就像「高」和正常竖条互斥一样。
     assert.equal(query('.dsh003-picker-effort-meter'), null)
-    // 也不该再画一根 3px 的淡轨道：那在 6% 透明度下看不见，
-    // 正是这个功能要解决的问题本身，而且会和「关闭思考」的空轨道混淆。
-    assert.equal(query('.dsh003-picker-effort-none-rail'), null, 'the invisible rail is gone')
+  } finally { restore() }
+})
+
+test('a model with no effort levels shows a short dim rail in the meter form', async () => {
+  // 竖条形态下同一个「无档位」画成短轨道：8px 高、6% 不透明、不填充。
+  // 与「关闭思考」的空轨道（12px、10%）区分开——意思不同，外观就必须不同。
+  const restore = stubLayout({ available: 200, effort: 26, label: 34 })
+  try {
+    const f = fixture()
+    f.publish({
+      current: { provider: 'p', model: 'a' },
+      groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'V4.1 Flash Free · routing group' }] }],
+    })
+    await render(f.directory)
+    await action(() => {})
+    const meter = query('.dsh003-picker-effort-meter')
+    assert.ok(meter !== null, 'the long name forces the meter form')
+    assert.equal(meter.getAttribute('data-none'), 'true', 'and it must be marked as "no levels"')
+    assert.equal(meter.getAttribute('data-empty'), 'true', 'with nothing filled in')
+    // 档位文字是淡出而不是删除（display:none 无法过渡），所以它仍在 DOM 里。
+    // 要断言的是「按钮处于竖条形态」，而不是「元素不存在」。
+    assert.equal(query('.dsh003-picker-btn').getAttribute('data-meter'), 'true')
   } finally { restore() }
 })
 
@@ -627,7 +645,8 @@ test('a model with levels never shows the "no levels" marker', async () => {
     })
     await render(f.directory)
     await action(() => {})
-    assert.equal(query('.dsh003-picker-btn-noeffort'), null, 'a model with levels must not claim it has none')
+    assert.notEqual(query('.dsh003-picker-btn-effort')?.textContent, '无',
+      'a model with levels must not claim it has none')
   } finally { restore() }
 })
 

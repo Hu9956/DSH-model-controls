@@ -303,7 +303,12 @@ export function useButtonCollapse(
       if (owner !== null) observer.observe(owner)
     }
     const fonts = document.fonts
-    fonts?.ready.then(measure).catch(() => { /* 字体接口不可用时忽略 */ })
+    // `document.fonts` 在旧 WebView / 测试环境里可能不存在。写成
+    // `fonts?.ready.then(...)` 是不够的：可选链只保护 `fonts`，`ready` 为
+    // undefined 时 `.then` 仍会抛 TypeError，整个 effect 中断、测量再也跑不到。
+    if (fonts !== undefined) {
+      fonts.ready.then(measure).catch(() => { /* 字体接口不可用时忽略 */ })
+    }
     return () => { observer.disconnect() }
     // deps 由调用方给出：档位名 / 模型名变化时重新测量。
     // eslint-disable-next-line react-hooks/exhaustive-deps

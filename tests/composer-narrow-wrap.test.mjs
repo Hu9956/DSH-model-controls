@@ -154,11 +154,19 @@ test('a model name too narrow to read is dropped whole, not truncated to one let
   assert.ok(!/display: none/.test(drop), 'display:none cannot be transitioned')
 })
 
-test('the button marker does not reuse the panel class name', () => {
-  // 面板里的 .dsh003-picker-effort-none 是「当前模型不支持调节」那一行 12px 文字；
-  // 按钮里若共用同名类，两条规则会互相覆盖（字号、颜色、flex 都会打架）。
-  assert.ok(/\.dsh003-picker-btn-noeffort\s*\{/.test(css),
-    'the button marker needs its own class')
-  const buttonRule = rule('dsh003-picker-btn-noeffort')
-  assert.match(buttonRule, /flex:\s*0 0 auto/, 'it must not shrink')
+test('"no levels" draws a shorter, dimmer rail than "off"', () => {
+  // 两者意思不同：关闭 = 有这个能力但此刻关掉了；没有档位 = 根本没有这个能力。
+  // 意思不同，外观就必须不同——3px 宽下长度的差别比亮度更容易分辨。
+  const none = /\[data-none="true"\] \{([\s\S]*?)\n\}/.exec(css)?.[1]
+  assert.ok(none !== undefined, 'the no-levels rail must have its own rule')
+  const height = /height:\s*(\d+)px/.exec(none)?.[1]
+  assert.equal(height, '8', 'shorter than the 12px normal rail')
+  assert.match(none, /6%/, 'and dimmer than the 10% normal rail')
+})
+
+test('the button does not reuse the panel class name', () => {
+  // 面板里的 .dsh003-picker-effort-none 是「当前模型不支持调节」那行 12px 文字；
+  // 按钮若共用同名类，两条规则会互相覆盖。
+  assert.ok(!/\.dsh003-picker-btn-noeffort\s*\{/.test(css),
+    'the button must not introduce a second class for the same slot')
 })
