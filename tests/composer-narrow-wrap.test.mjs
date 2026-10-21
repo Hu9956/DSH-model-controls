@@ -153,3 +153,12 @@ test('a model name too narrow to read is dropped whole, not truncated to one let
   assert.match(drop, /position: absolute/, 'out of flow, so it stops widening the button')
   assert.ok(!/display: none/.test(drop), 'display:none cannot be transitioned')
 })
+
+test('the button marker does not reuse the panel class name', () => {
+  // 面板里的 .dsh003-picker-effort-none 是「当前模型不支持调节」那一行 12px 文字；
+  // 按钮里若共用同名类，两条规则会互相覆盖（字号、颜色、flex 都会打架）。
+  assert.ok(/\.dsh003-picker-btn-noeffort\s*\{/.test(css),
+    'the button marker needs its own class')
+  const buttonRule = rule('dsh003-picker-btn-noeffort')
+  assert.match(buttonRule, /flex:\s*0 0 auto/, 'it must not shrink')
+})

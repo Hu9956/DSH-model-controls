@@ -265,10 +265,7 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
           )}
         </span>
         {hasNoEfforts && (
-          <span className="dsh003-picker-effort-none" aria-hidden="true">
-            <span className="dsh003-picker-effort-none-rail" />
-            <span className="dsh003-picker-effort-none-text">{t('effortNoneShort')}</span>
-          </span>
+          <span className="dsh003-picker-btn-noeffort" aria-hidden="true">{t('effortNoneShort')}</span>
         )}
         {showEffortMeter && (
           <span

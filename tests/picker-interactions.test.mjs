@@ -605,12 +605,14 @@ test('a model with no effort levels says so instead of showing nothing', async (
     })
     await render(f.directory)
     await action(() => {})
-    const none = query('.dsh003-picker-effort-none')
+    const none = query('.dsh003-picker-btn-noeffort')
     assert.ok(none !== null, 'a model with no levels must announce that, not stay silent')
     assert.equal(none.textContent, '无')
-    assert.ok(query('.dsh003-picker-effort-none-rail') !== null, 'and carry the short dim rail')
     // 不能和有档位的竖条同时出现——那是两个互相矛盾的信号。
     assert.equal(query('.dsh003-picker-effort-meter'), null)
+    // 也不该再画一根 3px 的淡轨道：那在 6% 透明度下看不见，
+    // 正是这个功能要解决的问题本身，而且会和「关闭思考」的空轨道混淆。
+    assert.equal(query('.dsh003-picker-effort-none-rail'), null, 'the invisible rail is gone')
   } finally { restore() }
 })
 
@@ -625,7 +627,7 @@ test('a model with levels never shows the "no levels" marker', async () => {
     })
     await render(f.directory)
     await action(() => {})
-    assert.equal(query('.dsh003-picker-effort-none'), null, 'a model with levels must not claim it has none')
+    assert.equal(query('.dsh003-picker-btn-noeffort'), null, 'a model with levels must not claim it has none')
   } finally { restore() }
 })
 
