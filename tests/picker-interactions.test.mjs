@@ -457,9 +457,11 @@ test('a cramped row hands the effort word to the meter', async () => {
     await render(f.directory)
     await action(() => {})
     const cap = Number.parseFloat(query('.dsh003-picker-btn').style.getPropertyValue('--dsh003-max'))
-    assert.ok(Math.abs(cap - 90) < 1, `200px row must yield a 90px cap, got ${cap}`)
+    // 200 × 0.45 = 90，低于下限 140，因此按钮仍是 140px。
+    assert.equal(cap, 140, `the 140px floor applies here, got ${cap}`)
+    // 140px 下文字态名字只剩 62px（不足 70px 门槛），换竖条可到约 87px。
     assert.equal(query('.dsh003-picker-btn').getAttribute('data-meter'), 'true',
-      'a 90px button cannot hold logo + word + chevron, so the word yields')
+      'a 140px button cannot give the name enough room with the word, so it yields')
   } finally { restore() }
 })
 
@@ -509,9 +511,9 @@ test('the measured width is written to the button so the row never wraps', async
     await render(f.directory)
     await action(() => {})
     // CSS 用 var(--dsh003-max) 当 max-width：宽度来自实测，不是硬编码公式。
-    // 现在是「行剩余 × 0.45」（上限 360px），而不是「剩余多少给多少」——
-    // 后者会让手机上的按钮正好占满整行。260 × 0.45 = 117（含亚像素取整）。
-    assert.equal(query('.dsh003-picker-btn').style.getPropertyValue('--dsh003-max'), '116.55px')
+    // 现在是「行剩余 × 0.45，下限 140、上限 360」，而不是「剩余多少给多少」——
+    // 后者会让手机上的按钮正好占满整行。260 × 0.45 = 117，低于下限，取 140。
+    assert.equal(query('.dsh003-picker-btn').style.getPropertyValue('--dsh003-max'), '140px')
   } finally { restore() }
 })
 
@@ -529,8 +531,10 @@ test('the button never eats the whole composer row on a phone', async () => {
     await render(f.directory)
     await action(() => {})
     const cap = Number.parseFloat(query('.dsh003-picker-btn').style.getPropertyValue('--dsh003-max'))
-    assert.ok(Math.abs(cap - 248 * 0.45) < 1, `expected about 45% of 248px, got ${cap}px`)
-    assert.ok(cap / 248 <= 0.46, 'the button must not fill the row')
+    // 248 × 0.45 = 112，低于下限，因此取 140（约占 56%），
+    // 而不是修复前的 248（100%）。下限的作用见 MIN_CAP。
+    assert.equal(cap, 140, `the 140px floor applies here, got ${cap}px`)
+    assert.ok(cap / 248 <= 0.57, `the button must not fill the row, got ${(cap / 248 * 100).toFixed(0)}%`)
   } finally { restore() }
 })
 

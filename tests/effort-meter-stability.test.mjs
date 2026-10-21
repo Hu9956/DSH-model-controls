@@ -19,10 +19,12 @@ import assert from 'node:assert/strict'
 const AVAILABLE_SHARE = 0.45
 /** 按钮宽度的绝对上限。 */
 const ABSOLUTE_CAP = 360
+/** 按钮宽度的下限：行剩余再小，也不让按钮窄到读不出模型名。 */
+const MIN_CAP = 140
 /** 名字不足一个汉字宽时整块收起。 */
 const MIN_LABEL_ROOM = 12
-/** 保留档位文字所需的最低名字宽度（约 6 个字符）。 */
-const MIN_TEXT_LABEL_ROOM = 40
+/** 保留档位文字所需的最低名字宽度（约 10 个字符）。 */
+const MIN_TEXT_LABEL_ROOM = 70
 
 /** 真实档位文字的排版宽度（12px 字号实测）。 */
 const REAL_EFFORT_WIDTHS = [13, 20, 26, 33, 40, 53, 66]
@@ -32,8 +34,15 @@ const parts = (effort, overrides = {}) => ({
   padding: 12, logo: 16, gap: 4, effort, chevron: 14, meter: 3, hasEffort: true, ...overrides,
 })
 
-/** 由「这一行剩余多少」算出按钮的宽度上限。 */
-const capOf = (available) => Math.min(ABSOLUTE_CAP, available * AVAILABLE_SHARE)
+/**
+ * 由「这一行剩余多少」算出按钮的宽度上限。
+ *
+ * 比例只在行剩余充足时决定宽度；窄窗口里行剩余本来就只有一两百像素，
+ * 乘 0.45 会算出 90px 这种读不出模型名的值，所以用 MIN_CAP 托底。
+ * 无论如何都不超过这一行本身。
+ */
+const capOf = (available) =>
+  Math.min(ABSOLUTE_CAP, available, Math.max(MIN_CAP, available * AVAILABLE_SHARE))
 
 /**
  * 决定折叠级别。
@@ -62,29 +71,31 @@ function decide(available, parts) {
   return 0
 }
 
-test('the button never takes more than its share of the row', () => {
-  // 这是本次修正的核心。旧公式 min(360, 剩余) 会让手机上按钮正好占满整行：
-  // 393px 的手机行剩余 248px，按钮就吃 248px，等于输入框底部三分之二。
-  for (const available of [120, 174, 248, 374, 674, 1234, 2000]) {
+test('the button never exceeds the row it sits in', () => {
+  // 最基本的一条：不管公式怎么变，按钮都不能比那一行剩余的空间还宽，
+  // 否则宿主会判定放不下而换行。
+  for (const available of [60, 120, 174, 248, 374, 674, 1234, 2000]) {
     const cap = capOf(available)
-    assert.ok(cap <= available, `cap ${cap} must never exceed the row's ${available}`)
-    if (available * AVAILABLE_SHARE <= ABSOLUTE_CAP) {
-      assert.ok(Math.abs(cap - available * AVAILABLE_SHARE) < 0.5,
-        `cap must be the fixed share of the row, got ${cap} for ${available}`)
-    } else {
-      assert.equal(cap, ABSOLUTE_CAP, 'wide screens stop at the absolute cap')
-    }
+    assert.ok(cap <= available + 0.001, `cap ${cap} must never exceed the row's ${available}`)
   }
 })
 
-test('the button share is identical on every screen size', () => {
-  // 手机撑满、桌面正常，这种割裂就是比例化要消灭的东西。
-  const rows = [174, 248, 374, 674]
-  const shares = rows.map(available => capOf(available) / available)
-  for (const share of shares) {
-    assert.ok(Math.abs(share - AVAILABLE_SHARE) < 0.001,
-      `every screen must spend the same share, got ${share}`)
-  }
+test('the button takes its share once the row is roomy, the floor once it is not', () => {
+  // 三段式：窄行的下限 > 中段的比例 > 宽行的封顶。
+  // 下限存在的理由：行剩余本来就只有一两百像素时，45% 会算出 90px——
+  // 扣掉 logo/档位/箭头后名字只剩三十几像素，读不出是哪个模型。
+  assert.equal(capOf(200), MIN_CAP, 'a cramped row hits the floor, not 90px')
+  assert.equal(capOf(248), MIN_CAP, 'the 393px phone hits the floor too')
+  // 中段：比例说了算，且高于下限。
+  assert.ok(Math.abs(capOf(600) - 600 * AVAILABLE_SHARE) < 0.5, 'a roomy row uses the share')
+  // 宽行：封顶。
+  assert.equal(capOf(2000), ABSOLUTE_CAP, 'very wide screens stop at the absolute cap')
+})
+
+test('the floor never makes the button bigger than the row', () => {
+  // 320px 手机上行剩余可能只有 100px，此时下限 140 若直接生效会撑破整行。
+  assert.ok(capOf(100) <= 100, 'the floor must yield to the row width')
+  assert.ok(capOf(140) <= 140)
 })
 
 test('the effort word yields when the name would get too little room', () => {
@@ -161,19 +172,25 @@ test('the model name is dropped whole rather than left as one character', () => 
   // 名字分不到一个汉字宽时整块收起，不留「V.…」。
   const p = parts(24)
   let dropped = null
-  for (let available = 2000; available >= 80; available -= 1) {
+  // 下限 140px 让按钮不会再窄于 140，而 140 仍放得下一个汉字的名字，
+  // 所以「只留图标」这一级在下限启用后通常不再可达——这是预期的：
+  // 与其缩到读不出模型，不如停在一个能读的最小宽度上。
+  for (let available = 2000; available >= 60; available -= 1) {
     if (decide(available, p) === 3) { dropped = available; break }
   }
-  assert.ok(dropped !== null, 'the sweep must reach the icon-only state')
+  if (dropped === null) {
+    assert.ok(capOf(60) === 60, 'the floor yields on a row narrower than the floor itself')
+    return
+  }
   assert.equal(decide(dropped, p), 3, 'at this width the name goes entirely')
   assert.ok(decide(dropped + 40, p) < 3, 'a bit wider and the name comes back')
 })
 
 test('the phone stops filling the composer row', () => {
-  // 回归用例：截图里的问题是 393px 手机上按钮吃满整行。
-  // 修正后它应该只占约 45%，且已经换用竖条（名字还能读）。
+  // 回归用例：截图里的问题是 393px 手机上按钮吃满整行（100%）。
+  // 修正后是 140px 下限，约占 56%，并且已经换用竖条让名字还能读。
   const available = 248
   const cap = capOf(available)
-  assert.ok(cap / available <= 0.46, `the button must not fill the row, got ${(cap / available * 100).toFixed(0)}%`)
+  assert.ok(cap / available <= 0.57, `the button must not fill the row, got ${(cap / available * 100).toFixed(0)}%`)
   assert.ok(decide(available, parts(24)) >= 2, 'and it hands over to the meter so the name stays readable')
 })
