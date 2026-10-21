@@ -155,7 +155,8 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
     return key === undefined ? currentEffortName : t(key)
   }, [currentEffortName, t])
 
-  /** 竖条填充比例：档位文字被截断时替代它显示。没有档位的模型不渲染竖条。
+  /** 竖条填充比例：档位文字被截断时替代它显示。没有档位的模型不渲染填充，
+   *  但仍渲染轨道（`data-none`），让「这个模型没有档位」可见。
    *  用 effortMeterHeight 而不是 effortProgress：后者与面板滑杆严格同刻度
    *  （最低档为 0），但 12px 高的竖条分不出「0」与「关闭」，所以绘制时抬到最小可见高度。 */
   const buttonEffortProgress = React.useMemo(() => {
@@ -164,6 +165,16 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
     if (reasoning === undefined || reasoning.efforts.length <= 1) return null
     return effortProgress(reasoning.efforts.map(e => e.id), effort)
   }, [catalog.default?.reasoningEffort, currentModel])
+
+  /**
+   * 这个模型**没有任何**思考档位（不是「关闭」，而是根本没有这个概念）。
+   *
+   * 为什么需要单独一个状态：以前这种情况什么都不画，于是按钮上既不显示档位
+   * 文字、也没有竖条——和「还没加载完」长得一样。用户会以为出了 bug，
+   * 而不是意识到这个模型本来就没有档位。
+   */
+  const hasNoEfforts = currentModel !== undefined
+    && (currentModel.reasoning === undefined || currentModel.reasoning.efforts.length <= 1)
 
   /** 实际画出来的高度：与滑杆同刻度，但最低的有效档也看得见。 */
   const buttonMeterHeight = React.useMemo(() => {
@@ -178,6 +189,7 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
   const effortProbeRef = React.useRef<HTMLSpanElement | null>(null)
   const chevronProbeRef = React.useRef<HTMLSpanElement | null>(null)
   const meterProbeRef = React.useRef<HTMLSpanElement | null>(null)
+  const labelProbeRef = React.useRef<HTMLSpanElement | null>(null)
   const collapse = useButtonCollapse(
     buttonRef,
     {
@@ -185,6 +197,7 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
       effort: effortProbeRef,
       chevron: chevronProbeRef,
       meter: meterProbeRef,
+      label: labelProbeRef,
     },
     buttonEffortName !== null,
     [buttonEffortName, buttonModelName, buttonEffortProgress],
@@ -192,9 +205,11 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
   const showEffortMeter = buttonEffortProgress !== null && collapse.showMeter
 
   /** 悬停提示保留完整信息：上游全名 + 档位，不跟按钮一起压缩。 */
-  const buttonTitle = currentEffortName === null
-    ? (currentModelName ?? t('modelFallback'))
-    : `${currentModelName ?? t('modelFallback')} · ${currentEffortName}`
+  const buttonTitle = hasNoEfforts
+    ? `${currentModelName ?? t('modelFallback')} · ${t('effortNoneTitle')}`
+    : currentEffortName === null
+      ? (currentModelName ?? t('modelFallback'))
+      : `${currentModelName ?? t('modelFallback')} · ${currentEffortName}`
 
   const pick = (providerId: string, modelId: string): void => {
     // no-op 语义：重复提交会把思考强度重置为模型默认（上游 route 变更清 effort 语义的同源风险）
@@ -245,7 +260,16 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
             <IconChevronDownOutlineRegular />
           </span>
           <span ref={meterProbeRef} className="dsh003-picker-probe dsh003-picker-meter-probe" />
+          {buttonModelName !== null && (
+            <span ref={labelProbeRef} className="dsh003-picker-probe dsh003-picker-label-probe">{buttonModelName}</span>
+          )}
         </span>
+        {hasNoEfforts && (
+          <span className="dsh003-picker-effort-none" aria-hidden="true">
+            <span className="dsh003-picker-effort-none-rail" />
+            <span className="dsh003-picker-effort-none-text">{t('effortNoneShort')}</span>
+          </span>
+        )}
         {showEffortMeter && (
           <span
             className="dsh003-picker-effort-meter"

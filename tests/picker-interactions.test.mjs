@@ -146,13 +146,16 @@ const key = async (element, value, type = 'keydown') => {
  * @param {{ available: number, effort: number, chevron?: number, logo?: number }} spec
  * @returns 还原函数。
  */
-function stubLayout({ available, effort, chevron = 14, logo = 16 }) {
+function stubLayout({ available, effort, chevron = 14, logo = 16, label = 0 }) {
   // 顺序敏感：档位文字探针只带通用类，必须放在专属类之后判断，
   // 否则 logo / 箭头 / 竖条探针都会被它抢先匹配。
   const widths = [
     ['dsh003-picker-logo-probe', logo],
     ['dsh003-picker-chev-probe', chevron],
     ['dsh003-picker-meter-probe', 3],
+    // 模型名探针：按「13px 字约 7px/字符」估算真实排版宽度。
+    // 必须排在通用探针之前，否则会被它抢先匹配成档位宽度。
+    ['dsh003-picker-label-probe', Math.max(20, (label ?? 0) * 7)],
     ['dsh003-picker-probe', effort],
   ]
   // 注意：文件顶部给 HTMLElement.prototype 设过兜底桩，它遮蔽 Element.prototype，
@@ -442,16 +445,16 @@ test('the chevron stays while the effort word and model name have room', async (
   } finally { restore() }
 })
 
-test('a cramped row hands the effort word to the meter', async () => {
-  // 同一模型、同一档位，只把「这一行还剩多少」压到 200px：
-  // 200 × 45% = 90px，连 logo + 文字 + 箭头都放不下，必须换竖条。
-  // （宽行的对照由上面的 chevron 用例覆盖，那里 600px 保留文字。）
-  const restore = stubLayout({ available: 200, effort: 26 })
+test('a long model name hands the effort word to the meter', async () => {
+  // 判据是「模型名放不下才换竖条」，不是按钮窄到某个值。
+  // 这里名字很长（V4.1 Flash Free · routing group），140px 的按钮放不下它，
+  // 于是换竖条把档位文字那 24px 让给名字。
+  const restore = stubLayout({ available: 200, effort: 26, label: 34 })
   try {
     const f = fixture()
     f.publish({
       current: { provider: 'p', model: 'a', reasoningEffort: 'high' },
-      groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'Model a',
+      groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'V4.1 Flash Free · routing group',
         reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'low' } }] }],
     })
     await render(f.directory)
@@ -459,9 +462,60 @@ test('a cramped row hands the effort word to the meter', async () => {
     const cap = Number.parseFloat(query('.dsh003-picker-btn').style.getPropertyValue('--dsh003-max'))
     // 200 × 0.45 = 90，低于下限 140，因此按钮仍是 140px。
     assert.equal(cap, 140, `the 140px floor applies here, got ${cap}`)
-    // 140px 下文字态名字只剩 62px（不足 70px 门槛），换竖条可到约 87px。
     assert.equal(query('.dsh003-picker-btn').getAttribute('data-meter'), 'true',
-      'a 140px button cannot give the name enough room with the word, so it yields')
+      'the name cannot fit at 140px, so the word yields to the meter')
+  } finally { restore() }
+})
+
+test('a short model name keeps the word even on a narrow button', async () => {
+  // 名字本来就放得下时，竖条没有存在的理由——它只会变成一个没有意义的图形。
+  // 这也是「竖条时有时无」的修正：短名字永远保留文字，不再看按钮多宽。
+  const restore = stubLayout({ available: 200, effort: 26 })
+  try {
+    const f = fixture()
+    f.publish({
+      current: { provider: 'p', model: 'a', reasoningEffort: 'high' },
+      groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'Opus-5',
+        reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'low' } }] }],
+    })
+    await render(f.directory)
+    await action(() => {})
+    assert.equal(query('.dsh003-picker-btn').getAttribute('data-meter'), 'false',
+      'a short name fits, so the word stays')
+  } finally { restore() }
+})
+
+test('switching effort levels never changes the button shape', async () => {
+  // 这是「竖条时有时无」的直接回归：判据曾经依赖当前档位文字的宽度，
+  // 于是同一个按钮里切「中」(12px) 与「最高」(24px) 会在文字/竖条间翻转。
+  // 现在判据只看模型名放不放得下，与选中的是哪一档无关。
+  const restore = stubLayout({ available: 374, effort: 24, label: 34 })
+  try {
+    const f = fixture()
+    f.publish({
+      current: { provider: 'p', model: 'a', reasoningEffort: 'medium' },
+      groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'V4.1 Flash Free · routing group',
+        reasoning: {
+          efforts: [{ id: 'medium', name: '中' }, { id: 'max', name: '最高' }],
+          defaultEffort: 'medium',
+        } }] }],
+    })
+    await render(f.directory)
+    await action(() => {})
+    const first = query('.dsh003-picker-btn').getAttribute('data-meter')
+
+    // 切到名字更长的档位：形态必须一模一样。
+    f.publish({
+      current: { provider: 'p', model: 'a', reasoningEffort: 'max' },
+      groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'V4.1 Flash Free · routing group',
+        reasoning: {
+          efforts: [{ id: 'medium', name: '中' }, { id: 'max', name: '最高' }],
+          defaultEffort: 'medium',
+        } }] }],
+    })
+    await action(() => {})
+    assert.equal(query('.dsh003-picker-btn').getAttribute('data-meter'), first,
+      'the shape must not flip just because a longer effort label was picked')
   } finally { restore() }
 })
 
@@ -535,6 +589,58 @@ test('the button never eats the whole composer row on a phone', async () => {
     // 而不是修复前的 248（100%）。下限的作用见 MIN_CAP。
     assert.equal(cap, 140, `the 140px floor applies here, got ${cap}px`)
     assert.ok(cap / 248 <= 0.57, `the button must not fill the row, got ${(cap / 248 * 100).toFixed(0)}%`)
+  } finally { restore() }
+})
+
+test('a model with no effort levels says so instead of showing nothing', async () => {
+  // 以前这种情况按钮上既不显示档位文字也没有竖条，和「还没加载完」长得一样，
+  // 用户会以为出了 bug，而不是意识到这个模型本来就没有档位。
+  // 现在必须画淡短轨道 + 一个「无」字。
+  const restore = stubLayout({ available: 400, effort: 26 })
+  try {
+    const f = fixture()
+    f.publish({
+      current: { provider: 'p', model: 'a' },
+      groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'Model a' }] }],
+    })
+    await render(f.directory)
+    await action(() => {})
+    const none = query('.dsh003-picker-effort-none')
+    assert.ok(none !== null, 'a model with no levels must announce that, not stay silent')
+    assert.equal(none.textContent, '无')
+    assert.ok(query('.dsh003-picker-effort-none-rail') !== null, 'and carry the short dim rail')
+    // 不能和有档位的竖条同时出现——那是两个互相矛盾的信号。
+    assert.equal(query('.dsh003-picker-effort-meter'), null)
+  } finally { restore() }
+})
+
+test('a model with levels never shows the "no levels" marker', async () => {
+  const restore = stubLayout({ available: 400, effort: 26 })
+  try {
+    const f = fixture()
+    f.publish({
+      current: { provider: 'p', model: 'a', reasoningEffort: 'high' },
+      groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'Model a',
+        reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'low' } }] }],
+    })
+    await render(f.directory)
+    await action(() => {})
+    assert.equal(query('.dsh003-picker-effort-none'), null, 'a model with levels must not claim it has none')
+  } finally { restore() }
+})
+
+test('the "no levels" marker explains itself on hover', async () => {
+  const restore = stubLayout({ available: 400, effort: 26 })
+  try {
+    const f = fixture()
+    f.publish({
+      current: { provider: 'p', model: 'a' },
+      groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'Model a' }] }],
+    })
+    await render(f.directory)
+    await action(() => {})
+    const title = query('.dsh003-picker-btn').getAttribute('title')
+    assert.match(title, /没有思考档位/, `the tooltip must say why, got ${title}`)
   } finally { restore() }
 })
 

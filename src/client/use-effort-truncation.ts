@@ -105,21 +105,6 @@ const ABSOLUTE_CAP = 360
  */
 const MIN_LABEL_ROOM = 12
 
-/**
- * 保留档位**文字**所需的最低名字宽度。
- *
- * 低于它就换成竖条。取 70px（13px 字号下约 10 个字符）——这是模型名还能
- * 被认出来的下限：`V4.1 Flash…` 尚可区分 `V4.1 Flash Free` 与 `V4.1 Flash`，
- * 再短就只剩 `V4.1 Fla…`，区分不了。
- *
- * 与竖条的关系：换过去能把档位文字那 24px 压成 3px，名字立刻多出 21px。
- * 所以在「名字不足 70px」时，那 21px 比「高」这个字更有价值。
- *
- * 数值经过校准：低于 70 时 140px 下限的手机按钮会停在 62px 的名字上
- * （`V4.1 Fla…`），竖条几乎永不启用；正好 70 时它在窄屏启用、在 520px
- * 窗口（名字 90px）仍保留文字。
- */
-const MIN_TEXT_LABEL_ROOM = 70
 
 /** 按钮内部的折叠状态。 */
 export interface ButtonCollapse {
@@ -149,6 +134,8 @@ export interface CollapseProbes {
   chevron: React.RefObject<HTMLElement | null>
   /** 竖条宽度。 */
   meter: React.RefObject<HTMLElement | null>
+  /** 模型名的完整排版宽度（不受省略号影响）。 */
+  label: React.RefObject<HTMLElement | null>
 }
 
 const widthOf = (element: HTMLElement | null): number | null =>
@@ -264,11 +251,25 @@ export function useButtonCollapse(
       // 以为还有 374px、判定「放得下文字」，而按钮其实只有 168px——
       // 结果就是文字被硬挤、名字反而更短。
       //
-      // 判据本身：加了档位文字后名字还剩不到 {@link MIN_TEXT_LABEL_ROOM}，
-      // 就换成竖条。竖条唯一的职责是省宽度给模型名，所以它应该在**名字开始
-      // 受委屈时**立刻接手，而不是等按钮窄到某个与内容无关的固定值。
-      const NEEDED_FOR_TEXT = base + gap * 3 + effortWidth + chevron
-      const showMeter = hasEffort && cap - NEEDED_FOR_TEXT < MIN_TEXT_LABEL_ROOM
+      // ## 判据为什么用「名字是否放得下」而不是固定宽度
+      //
+      // 竖条唯一的职责是省宽度给模型名。名字本来就放得下时，它没有存在的
+      // 理由——那只会让用户看到一个没有意义的图形。
+      //
+      // ## 为什么不能用 effortWidth（当前档位文字的宽度）
+      //
+      // 曾经用 `cap - (固定占位 + 当前档位文字) < 门槛`。问题是当前档位文字
+      // 会随用户切档而变：同一个 140px 按钮里，「中」(12px) 让名字剩 74px、
+      // 判为文字；「最高」(24px) 只剩 62px、判为竖条。于是**切一下档位，
+      // 按钮就换一个形状**，看起来就是「竖条时有时无」。
+      //
+      // 改为与名字宽度比较：名字完整宽度是模型自身的属性，与当前选的是哪一档
+      // 无关，所以同一模型内换档位形态不变。
+      const nameWidth = widthOf(probes.label.current)
+      const NEEDED_WITH_TEXT = base + gap * 3 + effortWidth + chevron
+      // 名字放不下（还差一点）时换竖条。留 1px 余量避免亚像素抖动。
+      const showMeter = hasEffort && nameWidth !== null
+        && nameWidth + NEEDED_WITH_TEXT > cap + 1
 
       // 判据二：只剩「logo + 模型名」时连箭头都放不下就收掉它。
       // 箭头是纯装饰，且缩一半就是残图，只能整块让位。

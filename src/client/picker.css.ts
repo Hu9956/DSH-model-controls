@@ -98,6 +98,32 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   display: none !important;
 }
 
+/* 「这个模型没有档位」：淡、短的轨道 + 一个「无」字。
+   为什么不能什么都不画：以前这种情况按钮上既没有档位文字也没有竖条，
+   和「还没加载完」长得一样，用户会以为是 bug，而不是意识到这个模型
+   本来就没有档位。
+   为什么不能和「关闭思考」共用空轨道：那会让人以为模型没有档位。
+   区别做在两处，都是 3px 宽下还看得见的：
+   - 轨道更短（8px vs 12px）：长度的差别比亮度更容易分辨；
+   - 轨道更淡（6% vs 10%）。
+   文字是主要信号，轨道只是提示「这里本该有东西」。 */
+.dsh003-picker-effort-none {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  flex: 0 0 auto !important;
+  white-space: nowrap !important;
+  color: var(--dsw-alias-label-caption) !important;
+  font-size: 12px !important;
+}
+.dsh003-picker-effort-none-rail {
+  display: block !important;
+  width: 3px !important;
+  height: 8px !important;
+  border-radius: 999px !important;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent) !important;
+}
+
 /* 窄容器降级：**宽度连续收缩，不设台阶**。
  *
  * 按钮的宽度上限只有一个连续公式（见 .dsh003-picker-btn 的 max-width），
@@ -232,6 +258,10 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
 .dsh003-picker-meter-probe {
   width: 3px !important;
   height: 12px !important;
+}
+/* 模型名探针：按真实内容排版（宽度可读），同样绝对定位、从不参与折叠。 */
+.dsh003-picker-label-probe {
+  white-space: nowrap !important;
 }
 .dsh003-picker-btn[data-open="true"] .dsh003-picker-chev {
   transform: rotate(180deg) !important;

@@ -93,7 +93,7 @@ export type PickerKey =
   | 'dialogLabel' | 'providerRailLabel' | 'favoritesLabel' | 'favoriteAdd' | 'favoriteRemove'
   | 'providerReorderHint' | 'effortLabel'
   | 'emptyFavorites' | 'emptyNoMatch' | 'loadingCatalog' | 'loadFailed' | 'emptyProvider' | 'emptyCatalog'
-  | 'partialProviders' | 'effortUnsupported' | 'retry' | 'providerLoadFailed'
+  | 'partialProviders' | 'effortUnsupported' | 'effortNoneShort' | 'effortNoneTitle' | 'retry' | 'providerLoadFailed'
   | 'modelFallback' | 'switchFailed' | 'triggerAria' | 'triggerAriaEffort'
   | 'effortOff' | 'effortMinimal' | 'effortLow' | 'effortMedium' | 'effortHigh' | 'effortXHigh' | 'effortMax'
 
@@ -120,6 +120,8 @@ export const pickerEn: Record<PickerKey, string> = {
   retry: 'Retry',
   providerLoadFailed: '{name}: {message}',
   effortUnsupported: 'This model does not support effort settings',
+  effortNoneShort: 'N/A',
+  effortNoneTitle: 'This model has no effort levels',
   modelFallback: 'Model',
   switchFailed: 'Could not switch the model or the effort. Try again.',
   triggerAria: 'Choose a model, currently {model}',
@@ -156,6 +158,8 @@ export const pickerZh: Record<PickerKey, string> = {
   retry: '重试',
   providerLoadFailed: '{name}：{message}',
   effortUnsupported: '当前模型不支持调节',
+  effortNoneShort: '无',
+  effortNoneTitle: '此模型没有思考档位',
   modelFallback: '模型',
   switchFailed: '模型或档位切换失败，请重试。',
   triggerAria: '选择模型，当前 {model}',
