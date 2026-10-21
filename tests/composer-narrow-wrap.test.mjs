@@ -44,9 +44,9 @@ test('no width threshold decides anything any more', () => {
 test('the button width comes from measurement, with a sane fallback', () => {
   const widths = [...rule('dsh003-picker-btn').matchAll(/max-width:\s*(.+?)!important;/g)]
   const last = widths.at(-1)[1]
-  // JS 把「这一行除按钮外的实际占位」减出来后写进 --dsh003-max；
+  // JS 算出「这一行剩余空间的固定份额」后写进 --dsh003-max；
   // 没有硬编码的 140px，也没有会在窄窗口算出负数的 calc()。
-  assert.match(last, /var\(--dsh003-max/, 'the measured available width must drive the button')
+  assert.match(last, /var\(--dsh003-max/, 'the measured share must drive the button')
   assert.match(last, /360px/, 'the official absolute cap stays')
   assert.ok(!/140px/.test(last), 'a hardcoded trailing-group width goes stale as soon as the layout changes')
   assert.ok(!/calc\(100cqw/.test(last), 'a negative cqw subtraction invalidates the whole declaration')

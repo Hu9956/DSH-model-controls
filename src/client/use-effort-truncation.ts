@@ -23,15 +23,26 @@
  *
  * ## 本实现
  *
- * 保留 ZCode 的断点语义，但宽度取自**实测的按钮可用宽度**而不是 composer 宽度：
- * composer 宽度里混着工具条、发送按钮等与本按钮无关的东西，用它当判据会让
- * 「同一个 composer 宽度下，模型名长短不同却同一断点」这个老问题重现。
+ * 与 ZCode 的共同点：**可替代信息（档位）优先让位给固定信息（模型名）**，
+ * 不等「放不下文字」才换。
  *
- * 因此这里只有两个判据，都基于实测：
+ * 与 ZCode 的两点不同：
  *
- *   1. **档位宽度断点**：按钮可用宽度 ≥ EFFORT_BREAKPOINT 时显示档位文字，
- *      否则换竖条。对应 ZCode 的 576px 断点，按按钮实际能占的宽度换算。
- *   2. **溢出折叠**：连箭头都放不下时先收箭头（纯装饰，缩一半就是残图）。
+ * 1. **参照物是按钮自身的宽度上限**，不是 composer 宽度。composer 宽度里混着
+ *    工具条、发送按钮等与本按钮无关的东西，用它当判据会重现「同一个 composer
+ *    宽度下，模型名长短不同却同一断点」的老问题。
+ * 2. **判据不是固定断点**，而是「加了档位文字后，模型名还剩多少」。竖条的
+ *    唯一职责就是省宽度给名字，所以它该在名字即将受委屈的那一刻接手，
+ *    而不是在某个与内容无关的像素值上。档位文字是「高」还是 `Extra high`
+ *    都不影响这个时刻的正确性——它们各自按自己的宽度参与计算。
+ *
+ * 因此这里三个判据，全部基于实测：
+ *
+ *   1. **宽度上限**：`min(360, 行剩余 × 0.45)`。按钮占那一行的固定份额，
+ *      手机不会吃满（曾经是 `min(360, 剩余)`，手机上正好占满 100%）。
+ *   2. **档位换竖条**：按上限扣掉文字后名字不足两个字宽时切换。
+ *   3. **溢出折叠**：连箭头都放不下时先收箭头（纯装饰，缩一半就是残图）；
+ *      名字连一个字宽都分不到时整块收起，不留 `V.…` 这种半截。
  *
  * 模型名保持连续收缩（`ellipsis`），这是 DSH 用户明确要的「慢慢缩」，
  * ZCode 是整块换图标，这里不照搬。
@@ -43,30 +54,61 @@
  *
  * 这里量的是**永不参与折叠的探针**（绝对定位、`visibility:hidden`、从不显隐），
  * 并且量可用宽度时把按钮自身宽度从所占宽度里减掉，所以结果与渲染状态无关。
+ * 三个判据用的都是 `cap`（由「行剩余」算出，与按钮当前宽度无关）和固定探针，
+ * 因此收掉任何一项都不会让判据翻回去——不会自激。
  */
 import * as React from 'react'
 
 /**
- * 档位文字与竖条的切换断点（按钮可用宽度）。
+ * 按钮宽度上限 = 这一行剩余空间 × 这个比例，再受 {@link ABSOLUTE_CAP} 封顶。
  *
- * 对应 ZCode 在 composer 576px 处让档位文字让位；按 ZCode 的按钮占比换算，
- * 那个时刻按钮可用宽度约 130–160px，取 150px。
+ * ## 为什么是比例，不是「剩余多少就给多少」
  *
- * 为什么不能再低：常态要完整放下「logo + 模型名一个字 + 档位文字 + 箭头」，
- * 中文最长「最高」需 92px、英文 `Extra high` 需 128px。断点低于 133px 时
- * 英文档位一出现就已经放不下，会立刻又跳成竖条——那正是抖动的来源。
- * 150px 给英文留 22px 余量、中文留 58px。
+ * 原先是 `min(360, 剩余)`——只要行里还有空间就全给按钮。桌面空间充足时没问题，
+ * 手机上行剩余小，按钮就**正好占满**：393px 宽的手机上行剩余 248px，按钮吃掉
+ * 248px，等于输入框底部三分之二。视觉上不是「名字太长」，而是「按钮撑爆了」。
  *
- * 与 ZCode 的差别只在**参照物**：ZCode 用 composer 宽度，这里用按钮自身可用宽度，
- * 因为同一个 composer 宽度下模型名长短差异可达 200px，用 composer 宽度必然误伤。
+ * 换成比例后按钮在任何屏幕上都只占那一行的固定份额，手机和桌面一致：
+ *
+ * | 场景 | 行剩余 | 按钮 |
+ * |---|---|---|
+ * | 320 手机 | 174px | 78px |
+ * | 393 手机 | 248px | 112px |
+ * | 520 窗口 | 374px | 168px |
+ * | 820 iPad | 674px | 303px |
+ * | 1400 桌面 | 1234px | 360px（封顶） |
+ *
+ * 0.45 是取值的折中：再小会让 320px 的手机把模型名压到不足两个字（整块收起，
+ * 只剩 logo + 竖条）；再大则手机上的按钮仍接近半行的上限，撑满观感没有改善。
  */
-const EFFORT_BREAKPOINT = 150
+const AVAILABLE_SHARE = 0.45
 
 /**
- * 模型名至少留出的宽度（约一个汉字）。仅用来判断「还有没有意义再加一项」，
- * 不是档位让位的门槛——那个由 EFFORT_BREAKPOINT 决定。
+ * 按钮宽度的绝对上限（官方触发器的同款值）。
+ *
+ * 桌面上行剩余 1200px 以上，45% 仍有 540px，这个上限负责把它停在 360px
+ * ——再宽也没有信息增量，只会让输入框底部失衡。
+ */
+const ABSOLUTE_CAP = 360
+
+/**
+ * 模型名至少留出的宽度（约一个汉字）。
+ *
+ * 既用于「还能不能再加一项」的判断，也用于「少到一个字就整块收起」的门槛。
  */
 const MIN_LABEL_ROOM = 12
+
+/**
+ * 保留档位**文字**所需的最低代价：名字至少还有这么宽。
+ *
+ * 低于它就换成竖条。取约 6 个字符（13px 字号）：
+ *
+ * - 门槛 24px（2 字）：393px 的手机停在 34px 的名字上，显示 `V4.1…`，
+ *   而换成竖条能立刻多出 21px 变成 `V4.1 Fla…`——观感差别明显。
+ * - 门槛 40px：393px 的手机换竖条，520px 的窗口仍保留文字（名字 90px）。
+ * - 门槛再高（70px）：520px 的窗口也被迫换成竖条，而那里文字明明放得下。
+ */
+const MIN_TEXT_LABEL_ROOM = 40
 
 /** 按钮内部的折叠状态。 */
 export interface ButtonCollapse {
@@ -179,9 +221,14 @@ export function useButtonCollapse(
       const available = measureAvailableWidth(row, button)
       if (available === null) return
 
-      // 把可用宽度交给 CSS 当 max-width：按钮因此永远不会把这一行顶成两行。
-      // 这一步用真实测量替代了此前写死的 `calc(100cqw - 140px)`。
-      button.style.setProperty('--dsh003-max', `${available}px`)
+      // 按钮的宽度上限：这一行剩余空间的一个固定份额，再受绝对上限封顶。
+      // 曾经是 `min(360, 剩余)`，手机上于是正好占满整行剩余（393px 的手机
+      // 按钮吃掉 248px，等于输入框底部三分之二）。比例化之后任何屏幕下
+      // 按钮都只占那一行的同一份额。
+      const cap = Math.min(ABSOLUTE_CAP, available * AVAILABLE_SHARE)
+
+      // 注意：CSS 拿到的仍然是「上限」，不是定宽。模型名短时按钮会自然更窄。
+      button.style.setProperty('--dsh003-max', `${cap}px`)
 
       const style = window.getComputedStyle(button)
       const padding = (Number.parseFloat(style.paddingLeft) || 0) + (Number.parseFloat(style.paddingRight) || 0)
@@ -196,16 +243,26 @@ export function useButtonCollapse(
       const base = padding + logo
       const effortWidth = hasEffort ? (effort ?? 0) : 0
 
-      // 判据一：档位宽度断点。低于它就把档位文字换成竖条，不再等「放不下」。
-      // 这是 ZCode 的核心行为：档位是可替代信息，模型名才是要保住的。
-      const showMeter = hasEffort && available < EFFORT_BREAKPOINT
+      // 判据一：档位文字换竖条。
+      //
+      // 参照物必须是上面算出的 cap，不是 available。上方一压，按钮实际就
+      // 只有 cap 那么宽了；若仍拿 available（原始行剩余）去判，手机上会
+      // 以为还有 374px、判定「放得下文字」，而按钮其实只有 168px——
+      // 结果就是文字被硬挤、名字反而更短。
+      //
+      // 判据本身：加了档位文字后名字还剩不到 {@link MIN_TEXT_LABEL_ROOM}，
+      // 就换成竖条。竖条唯一的职责是省宽度给模型名，所以它应该在**名字开始
+      // 受委屈时**立刻接手，而不是等按钮窄到某个与内容无关的固定值。
+      const NEEDED_FOR_TEXT = base + gap * 3 + effortWidth + chevron
+      const showMeter = hasEffort && cap - NEEDED_FOR_TEXT < MIN_TEXT_LABEL_ROOM
 
       // 判据二：只剩「logo + 模型名」时连箭头都放不下就收掉它。
       // 箭头是纯装饰，且缩一半就是残图，只能整块让位。
       const tail = showMeter ? (meterWidth ?? 0) : effortWidth
       // 间距：logo | 模型名 | 档位(或竖条) | 箭头 → 3 个
       const neededWithChevron = base + gap * 3 + tail + chevron + MIN_LABEL_ROOM
-      const compactChevron = neededWithChevron > available
+      // 同样对齐 cap，按钮实际只有这么宽。
+      const compactChevron = neededWithChevron > cap
 
       // 判据三：模型名还分不到一个字宽时整个收起。
       // 否则会留下 `V.…` 这样的半截——读不出信息，却仍占着比图标更宽的位置。
@@ -215,7 +272,7 @@ export function useButtonCollapse(
       // 这个值不会变大，不可能反过来判定「又能显示了」——不会自激。
       // 间距按「logo | 模型名 | 档位(或竖条) | 箭头」中的**三项**算，
       // 这样收掉箭头与否都得到同一个门槛。
-      const labelRoom = available - base - gap * 2 - tail
+      const labelRoom = cap - base - gap * 2 - tail
       const compactLabel = labelRoom < MIN_LABEL_ROOM
 
       setCollapse({ compactChevron, showMeter, compactLabel })

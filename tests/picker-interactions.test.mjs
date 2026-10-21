@@ -423,8 +423,10 @@ test('the meter stays hidden while the effort word still fits', async () => {
 })
 
 test('the chevron stays while the effort word and model name have room', async () => {
-  // 断点之上、且能放下最宽档位文字：箭头必须留着（它是唯一的展开提示）。
-  const restore = stubLayout({ available: 200, effort: 62 })
+  // 上限够宽、能放下最宽档位文字：箭头必须留着（它是唯一的展开提示）。
+  // 注意这里是「行剩余 600px」，经 45% 后上限 270px——足够放下
+  // logo + 名字 + `Extra high`(66px) + 箭头，且名字仍远超 40px。
+  const restore = stubLayout({ available: 600, effort: 62 })
   try {
     const f = fixture()
     f.publish({
@@ -437,6 +439,27 @@ test('the chevron stays while the effort word and model name have room', async (
     const trigger = query('.dsh003-picker-btn')
     assert.equal(trigger.getAttribute('data-compact-chev'), 'false')
     assert.equal(trigger.getAttribute('data-meter'), 'false')
+  } finally { restore() }
+})
+
+test('a cramped row hands the effort word to the meter', async () => {
+  // 同一模型、同一档位，只把「这一行还剩多少」压到 200px：
+  // 200 × 45% = 90px，连 logo + 文字 + 箭头都放不下，必须换竖条。
+  // （宽行的对照由上面的 chevron 用例覆盖，那里 600px 保留文字。）
+  const restore = stubLayout({ available: 200, effort: 26 })
+  try {
+    const f = fixture()
+    f.publish({
+      current: { provider: 'p', model: 'a', reasoningEffort: 'high' },
+      groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'Model a',
+        reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'low' } }] }],
+    })
+    await render(f.directory)
+    await action(() => {})
+    const cap = Number.parseFloat(query('.dsh003-picker-btn').style.getPropertyValue('--dsh003-max'))
+    assert.ok(Math.abs(cap - 90) < 1, `200px row must yield a 90px cap, got ${cap}`)
+    assert.equal(query('.dsh003-picker-btn').getAttribute('data-meter'), 'true',
+      'a 90px button cannot hold logo + word + chevron, so the word yields')
   } finally { restore() }
 })
 
@@ -486,8 +509,28 @@ test('the measured width is written to the button so the row never wraps', async
     await render(f.directory)
     await action(() => {})
     // CSS 用 var(--dsh003-max) 当 max-width：宽度来自实测，不是硬编码公式。
-    // 减去 1px：算到「刚好占满」时亚像素舍入会让宿主判定放不下而换行。
-    assert.equal(query('.dsh003-picker-btn').style.getPropertyValue('--dsh003-max'), '259px')
+    // 现在是「行剩余 × 0.45」（上限 360px），而不是「剩余多少给多少」——
+    // 后者会让手机上的按钮正好占满整行。260 × 0.45 = 117（含亚像素取整）。
+    assert.equal(query('.dsh003-picker-btn').style.getPropertyValue('--dsh003-max'), '116.55px')
+  } finally { restore() }
+})
+
+test('the button never eats the whole composer row on a phone', async () => {
+  // 回归用例：截图里 393px 的手机上按钮占满整行剩余（100%），
+  // 看起来就是「输入框底部三分之二都是它」。修正后必须只占约 45%。
+  const restore = stubLayout({ available: 248, effort: 26 })
+  try {
+    const f = fixture()
+    f.publish({
+      current: { provider: 'p', model: 'a', reasoningEffort: 'high' },
+      groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'Model a',
+        reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'low' } }] }],
+    })
+    await render(f.directory)
+    await action(() => {})
+    const cap = Number.parseFloat(query('.dsh003-picker-btn').style.getPropertyValue('--dsh003-max'))
+    assert.ok(Math.abs(cap - 248 * 0.45) < 1, `expected about 45% of 248px, got ${cap}px`)
+    assert.ok(cap / 248 <= 0.46, 'the button must not fill the row')
   } finally { restore() }
 })
 
