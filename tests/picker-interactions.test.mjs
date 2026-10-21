@@ -661,6 +661,37 @@ test('a catalog load error offers a retry instead of only a message', async () =
   await action(() => retry.click())
   assert.equal(reloads, before + 1)
 })
+test('on a phone the menu centres instead of hugging the left edge', () => {
+  // 393px 宽的手机上面板是 320px。按「右缘对齐按钮」算会得到负数，只能推回 8px，
+  // 于是左边空 8px、右边空 65px——肉眼就是贴在左侧。面板已占八成宽度，居中才对。
+  const width = 393
+  const panelWidth = Math.min(320, width - 16)
+  // 按钮在 composer 里靠右：截图里右缘约在 282px 处。
+  const p = pickerPosition({ top: 700, bottom: 734, right: 282 }, width, 844)
+  const leftGap = width - p.right - panelWidth
+  const rightGap = p.right
+  assert.equal(leftGap.toFixed(1), rightGap.toFixed(1), `must be centred, got left ${leftGap} / right ${rightGap}`)
+  assert.ok(Math.abs(leftGap - 36.5) < 0.5, 'the side gaps are the leftover half of the viewport')
+})
+
+test('on a narrow viewport the menu stays centred but never overflows', () => {
+  // 320px 的极窄屏：居中会算出负数，必须退回 8px 内边距，而不是溢出或推歪。
+  const width = 320
+  const panelWidth = Math.min(320, width - 16)
+  const p = pickerPosition({ top: 600, bottom: 634, right: 300 }, width, 844)
+  assert.equal(p.right, 8)
+  assert.equal(width - p.right - panelWidth, 8)
+})
+
+test('on a desktop the menu still hugs the trigger rather than centring', () => {
+  // 桌面上面板相对视口很窄，贴按钮才有意义：视线不用横跳，也不遮住整屏。
+  const width = 1400
+  const panelWidth = Math.min(320, width - 16)
+  const p = pickerPosition({ top: 900, bottom: 934, right: 1200 }, width, 844)
+  assert.equal(p.right, width - 1200, 'the right edge lines up with the trigger')
+  assert.notEqual(width - p.right - panelWidth, p.right, 'and it is visibly not centred')
+})
+
 test('menu placement preserves normal size, shrinks above, flips below and stays in bounds', () => {
   const cases = [
     { width: 1000, height: 700, rect: { top: 500, bottom: 528, right: 900 }, expectedHeight: 360, above: true },
