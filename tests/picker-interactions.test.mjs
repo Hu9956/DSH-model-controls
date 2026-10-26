@@ -901,6 +901,43 @@ test('Escape cancels a keyboard preview before restoring trigger focus', async (
   assert.equal(win.document.activeElement, query('.dsh003-picker-btn'))
 })
 
+test('a streaming repaint that scrolls the conversation cannot close the panel', async () => {
+  // dsh-smooth-stream 在回答期间每帧写 conversation 的 scrollTop。弹层挂在 fixed 视口上，
+  // 按钮没动，弹层就没失准——这时候关掉就是「点开即关」。
+  const f = fixture(); await render(f.directory); await open()
+  // 三帧流式重绘：scroll 冒到 window，但按钮矩形不变。
+  for (let frame = 0; frame < 3; frame++) {
+    await action(() => win.document.dispatchEvent(new win.Event('scroll', { bubbles: true })))
+  }
+  assert.notEqual(query('[role="dialog"]'), null)
+})
+
+test('a real page scroll still dismisses the panel', async () => {
+  // 反例守卫：按钮真的离开原位时必须关，否则弹层会飘在错误的位置。
+  const f = fixture(); await render(f.directory); await open()
+  const rect = win.HTMLElement.prototype.getBoundingClientRect
+  win.HTMLElement.prototype.getBoundingClientRect = function () {
+    const box = rect.call(this)
+    return this.classList?.contains('dsh003-picker-btn')
+      ? { ...box, top: box.top - 120, bottom: box.bottom - 120 }
+      : box
+  }
+  try {
+    await action(() => win.document.dispatchEvent(new win.Event('scroll', { bubbles: true })))
+  } finally {
+    win.HTMLElement.prototype.getBoundingClientRect = rect
+  }
+  assert.equal(query('[role="dialog"]'), null)
+})
+
+test('scrolling inside the panel keeps it open', async () => {
+  const f = fixture(); await render(f.directory); await open()
+  const list = query('.dsh003-picker-model-list')
+  assert.notEqual(list, null)
+  await action(() => list.dispatchEvent(new win.Event('scroll', { bubbles: true })))
+  assert.notEqual(query('[role="dialog"]'), null)
+})
+
 test('locking closes the panel, cancels its pointer preview and does not reopen on unlock', async () => {
   const f = fixture(); await render(f.directory); await open()
   const staleRow = rows()[1]

@@ -54,6 +54,8 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
   // 官方模型入口在右侧：弹层右缘对齐按钮右缘，向左展开。
   const [pos, setPos] = React.useState<React.CSSProperties | null>(null)
   const buttonRef = React.useRef<HTMLButtonElement | null>(null)
+  /** 打开瞬间按钮的视口矩形：滚动时用它判断按钮到底有没有真的挪位。 */
+  const anchorRef = React.useRef<DOMRect | null>(null)
 
   const closeMenu = React.useCallback((restoreFocus = false): void => {
     setOpen(false)
@@ -72,6 +74,7 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
     const el = buttonRef.current
     if (el === null) return
     const rect = el.getBoundingClientRect()
+    anchorRef.current = rect
     setPos(pickerPosition(rect, window.innerWidth, window.innerHeight))
     adapter.load()
     setOpen(true)
@@ -92,11 +95,23 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
         closeMenu(true)
       }
     }
-    // M-055：面板内滚动（模型/供应商列表 overflow）不动 fixed 锚点，不关；页面滚动仍关
+    // M-055：面板内滚动（模型/供应商列表 overflow）不动 fixed 锚点，不关；
+    // 页面滚动仍关——但只在按钮**真的跟着挪了**的时候关。
+    //
+    // 为什么不能无条件关（0.2.35 修）：弹层是 `position: fixed`，它的坐标只跟
+    // 视口有关；而 scroll 事件是**捕获阶段**监听在 window 上的，任何内部滚动容器
+    // 冒上来都会命中。流式输出插件（dsh-smooth-stream 接管底部跟随）在回答期间
+    // 每帧写 conversation 的 scrollTop，于是每帧都触发一次滚动 → 面板点开即关。
+    // 判定改成「按钮矩形是否真的位移」：只要按钮没动，弹层就没有失准的理由。
     const onScroll = (e: Event): void => {
       const target = e.target as Node
       if (target instanceof Element && target.closest('.dsh003-picker-panel') !== null) return
-      closeMenu()
+      const anchor = anchorRef.current
+      const el = buttonRef.current
+      if (anchor === null || el === null) return
+      const now = el.getBoundingClientRect()
+      // 1px 容差：亚像素抖动来自子元素高度的小数变化，不是真的滚动。
+      if (Math.abs(now.top - anchor.top) > 1 || Math.abs(now.left - anchor.left) > 1) closeMenu()
     }
     const onReflow = (): void => closeMenu()
     document.addEventListener('pointerdown', onPointerDown, true)
