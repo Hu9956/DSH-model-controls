@@ -95,8 +95,10 @@ export function apply(ctx: ClientContext): void {
       })
     }
     const sessions = ctx.get('sessions') as Pick<ISessions, 'subagentAddress'> | undefined
-    const directories = ctx.get('modelDirectories') as { directoryFor(sessionId: SessionId): ModelDirectoryFace }
-    if (slots) {
+    const directories = ctx.get('modelDirectories') as { directoryFor(sessionId: SessionId): ModelDirectoryFace } | undefined
+    // 宿主缺 modelDirectories 服务时 ctx.get 不抛、返回 undefined——
+    // inject 回调是延迟执行的，外层 try 兜不住，这里必须显式跳过注册。
+    if (slots && directories !== undefined && typeof directories.directoryFor === 'function') {
       slots.inject('conversation.input.model', () =>
         slots.register(
           {

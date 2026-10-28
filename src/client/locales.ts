@@ -135,6 +135,9 @@ export const pickerEn: Record<PickerKey, string> = {
   effortMax: 'Max',
 }
 
+/** Fallback reader for hosts without a locale service (tests included): Chinese copy. */
+export const pickerFallback: Translate<PickerKey> = (key, params) => format(pickerZh[key], params)
+
 /** Simplified Chinese copy for the picker panel. */
 export const pickerZh: Record<PickerKey, string> = {
   searchNeutral: '搜索模型…',

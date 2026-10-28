@@ -15,12 +15,12 @@ import { effortKeyOf } from './effort-labels'
 import { ProviderLogo } from './provider-logos'
 import { displayProviderIcon, displayProviderName } from './display-identity'
 import { searchPlaceholder } from './search-placeholder'
-import { format, pickerZh, type PickerKey, type Translate } from './locales'
+import { format, pickerFallback, type PickerKey, type Translate } from './locales'
 import type { CatalogGroupSnapshot } from './model-catalog'
 import { useProviderSort } from './use-provider-sort'
 
 /** 未注入语言服务时的兜底（测试或无 locale 的宿主）。 */
-const fallbackTranslate: Translate<PickerKey> = (key, params) => format(pickerZh[key], params)
+const fallbackTranslate = pickerFallback
 
 function StarIcon(props: { filled: boolean }): React.ReactNode {
   // lucide star（24 viewBox）：统一保留 2px 描边边界，避免实心填充消除描边外扩导致视觉缩小（10%跳变）
@@ -49,6 +49,12 @@ function CheckIcon(): React.ReactNode {
     </svg>
   )
 }
+
+/** 把 v 夹在 [lo, hi]。 */
+const clamp = (v: number, lo: number, hi: number): number => Math.min(Math.max(v, lo), hi)
+
+/** 空 failures 常量：`props.failures ?? []` 每次 render 新建数组会让下游比对失真。 */
+const EMPTY_FAILURES: ReadonlyArray<never> = []
 
 /** 面板行：提供方 + 模型（收藏视图跨提供方汇总用）。
  * 主行 `primary` 与副行 `sub` 是显示层结果：Magpie 的「模型 · 路由来源」显示名拆成两行，
@@ -274,8 +280,8 @@ export function ModelPickerPanel(props: {
 
   const maxIndex = Math.max(effortCount - 1, 0)
   const liveIndex = dragRatio !== null
-    ? Math.min(Math.max(Math.round(dragRatio * maxIndex), 0), maxIndex)
-    : Math.min(Math.max(snapIndex ?? activeIndex, 0), maxIndex)
+    ? clamp(Math.round(dragRatio * maxIndex), 0, maxIndex)
+    : clamp(snapIndex ?? activeIndex, 0, maxIndex)
   const positionRatio = dragRatio !== null ? dragRatio : (effortCount > 1 ? liveIndex / (effortCount - 1) : 0)
 
   const displayedEffortName = React.useMemo(() => {
@@ -291,7 +297,7 @@ export function ModelPickerPanel(props: {
     if (!keyboardPreviewRef.current) return
     keyboardPreviewRef.current = false
     if (!efforts) return
-    const idx = Math.min(Math.max(snapIndexRef.current ?? activeIndex, 0), efforts.length - 1)
+    const idx = clamp(snapIndexRef.current ?? activeIndex, 0, efforts.length - 1)
     const next = efforts[idx]
     if (next !== undefined && next.id !== effectiveEffort) {
       props.onSelectEffort?.(next.id)
@@ -301,7 +307,7 @@ export function ModelPickerPanel(props: {
   const onSliderKeyDown = (e: React.KeyboardEvent): void => {
     if (!efforts || efforts.length < 2) return
     const maxIdx = efforts.length - 1
-    const base = Math.min(Math.max(snapIndexRef.current ?? activeIndex, 0), maxIdx)
+    const base = clamp(snapIndexRef.current ?? activeIndex, 0, maxIdx)
     let next: number | null = null
     if (e.key === 'ArrowRight' || e.key === 'ArrowUp') next = Math.min(base + 1, maxIdx)
     else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') next = Math.max(base - 1, 0)
@@ -328,7 +334,7 @@ export function ModelPickerPanel(props: {
     if (efforts !== undefined && efforts.length >= 2 && dragRectRef.current !== null) {
       const rect0 = dragRectRef.current
       const raw0 = (e.clientX - rect0.left - 8) / Math.max(rect0.width - 16, 1)
-      lockSnap(Math.round(Math.min(Math.max(raw0, 0), 1) * (efforts.length - 1)))
+      lockSnap(Math.round(clamp(raw0, 0, 1) * (efforts.length - 1)))
     }
     try {
       hitEl.setPointerCapture(e.pointerId)
@@ -341,7 +347,7 @@ export function ModelPickerPanel(props: {
       if (Math.hypot(ev.clientX - startXRef.current, ev.clientY - startYRef.current) < 5) return
       const rect = dragRectRef.current
       const raw = (ev.clientX - rect.left - 8) / Math.max(rect.width - 16, 1)
-      const clamped = Math.min(Math.max(raw, 0), 1)
+      const clamped = clamp(raw, 0, 1)
       dragRatioRef.current = clamped
       setDragRatio(clamped)
     }
@@ -372,8 +378,8 @@ export function ModelPickerPanel(props: {
       cleanup()
       if (!efforts || efforts.length < 2) return
       const idx = started !== null
-        ? Math.min(Math.max(Math.round(started * (efforts.length - 1)), 0), efforts.length - 1)
-        : Math.min(Math.max(snapIndexRef.current ?? activeIndex, 0), efforts.length - 1)
+        ? clamp(Math.round(started * (efforts.length - 1)), 0, efforts.length - 1)
+        : clamp(snapIndexRef.current ?? activeIndex, 0, efforts.length - 1)
       lockSnap(idx)
       const next = efforts[idx]
       if (next !== undefined && next.id !== effectiveEffort) {
@@ -553,7 +559,7 @@ export function ModelPickerPanel(props: {
       {/* 逐个提供方给出失败原因 + 重试。只显示一句「部分提供方加载失败」会让用户
           不知道该去改哪个配置；宿主其实已经在 failures 里给了 id / name / message。
           交互照官方 ModelSelect：同样的 retry 按钮、同样的位置（列表下方）。 */}
-      {(props.failures ?? []).map(failure => (
+      {(props.failures ?? EMPTY_FAILURES).map(failure => (
         <p key={failure.id} className="dsh003-picker-notice" role="status">
           <span>{format(t('providerLoadFailed'), {
             name: failure.name ?? failure.id,
@@ -566,7 +572,7 @@ export function ModelPickerPanel(props: {
           )}
         </p>
       ))}
-      {props.partial && (props.failures ?? []).length === 0 && (
+      {props.partial && (props.failures ?? EMPTY_FAILURES).length === 0 && (
         <p className="dsh003-picker-notice" role="status">{t('partialProviders')}</p>
       )}
       {/* 整个目录加载失败：给可点的重试，而不是让用户关掉面板重开。 */}
@@ -620,6 +626,8 @@ export function ModelPickerPanel(props: {
               {efforts.map((level, i) => {
                 const tickRatio = effortCount > 1 ? i / (effortCount - 1) : 0
                 const isMax = i === effortCount - 1
+                const nameKey = effortKeyOf(level.name)
+                const tickTitle = level.description ?? (nameKey === undefined ? level.name : t(nameKey))
                 return (
                   <span
                     key={level.id}
@@ -628,7 +636,7 @@ export function ModelPickerPanel(props: {
                     style={{
                       left: `calc(8px + (100% - 16px) * ${tickRatio})`,
                     }}
-                    title={level.description ?? (effortKeyOf(level.name) === undefined ? level.name : t(effortKeyOf(level.name)!))}
+                    title={tickTitle}
                   />
                 )
               })}

@@ -45,11 +45,13 @@ function resolveModelEffort(state: DirectoryState, provider: string, model: stri
 
 /** Serialize writes across picker instances sharing this session. Remember only accepted choices. */
 export function selectCatalogModel(directory: ModelDirectoryFace, provider: string, model: string, effort?: string): Promise<boolean> {
-  const operation = (queues.get(directory) ?? Promise.resolve()).then(async () => {
-    const before = directory.store.getSnapshot()
-    const previous = before.current
-    const reasoningEffort = effort ?? resolveModelEffort(before, provider, model)
+  // 队列接续：operation 内部 try 包住同步与异步路径、catch 恒返回 false，因此它永不 reject，
+  // 前驱的异常既不会逃逸给调用方，也不会毒化队列里排队的下一次选择。
+  const operation = (queues.get(directory) ?? Promise.resolve()).then(async (): Promise<boolean> => {
     try {
+      const before = directory.store.getSnapshot()
+      const previous = before.current
+      const reasoningEffort = effort ?? resolveModelEffort(before, provider, model)
       const result = await directory.select({ provider, model, ...(reasoningEffort === undefined ? {} : { reasoningEffort }) })
       if (!result.ok) return false
       if (previous?.reasoningEffort !== undefined) {
@@ -63,6 +65,8 @@ export function selectCatalogModel(directory: ModelDirectoryFace, provider: stri
       }
       return true
     } catch (error) {
+      // 同步路径（getSnapshot / 本地 effort 记忆）与异步 select 同口径：失败即 false，
+      // 既不让 rejection 逃逸给调用方，也不毒化队列里排队的下一次选择。
       console.warn('[model-picker] model selection failed', error)
       return false
     }

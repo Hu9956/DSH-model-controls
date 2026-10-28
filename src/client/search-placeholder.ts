@@ -5,13 +5,13 @@
  * same rule holds in any language.
  */
 
-import { format, pickerZh, type PickerKey, type Translate } from './locales'
+import { format, pickerFallback, pickerZh, type PickerKey, type Translate } from './locales'
 
 /** The input's text area: 204px at 12px, where one Latin glyph ≈ 1 unit and one CJK ≈ 2. */
 const TEXT_UNITS = 30
 
 /** Fallback used when no locale service is bound (tests, or a host without one). */
-const fallback: Translate<PickerKey> = (key, params) => format(pickerZh[key], params)
+const fallback: Translate<PickerKey> = pickerFallback
 
 /** Neutral copy, also the input's accessible name. */
 export const NEUTRAL_PLACEHOLDER = pickerZh.searchNeutral

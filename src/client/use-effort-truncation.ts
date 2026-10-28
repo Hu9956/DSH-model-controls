@@ -124,7 +124,7 @@ export interface ButtonCollapse {
   compactLabel: boolean
 }
 
-/** 四个恒定存在的量宽探针；都绝对定位、从不显隐。 */
+/** 恒定存在的量宽探针；都绝对定位、从不显隐。 */
 export interface CollapseProbes {
   /** 与真实 logo 同尺寸。logo 本身不会被折叠，但统一用探针以避免量到 0。 */
   logo: React.RefObject<HTMLElement | null>
@@ -167,7 +167,7 @@ function measureAvailableWidth(row: HTMLElement, button: HTMLElement): number | 
   const padding = (Number.parseFloat(style.paddingLeft) || 0) + (Number.parseFloat(style.paddingRight) || 0)
   const gap = Number.parseFloat(style.columnGap) || 0
   const total = row.clientWidth - padding
-  if (!(total > 0)) return null
+  if (total <= 0) return null
   const buttonWidth = button.getBoundingClientRect().width
   let used = 0
   let count = 0
@@ -190,7 +190,7 @@ function measureAvailableWidth(row: HTMLElement, button: HTMLElement): number | 
  * 实测按钮内部是否放得下，并按顺序折叠。
  *
  * @param buttonRef - 按钮本身，用于找所属行、读内边距与列间距。
- * @param probes - 四个量宽探针。
+ * @param probes - 量宽探针。
  * @param hasEffort - 有档位文字时才走折叠；没有时只判断箭头。
  * @param deps - 触发重新测量的值：档位名 / 模型名 / 档位比例变化时重算。
  * @returns 当前折叠状态；同时把可用宽度写进按钮的 `--dsh003-max`。
@@ -290,7 +290,13 @@ export function useButtonCollapse(
       const labelRoom = cap - base - gap * 2 - tail
       const compactLabel = labelRoom < MIN_LABEL_ROOM
 
-      setCollapse({ compactChevron, showMeter, compactLabel })
+      // 拖拽缩放时 RO 每帧回调；值没变就不触发重渲染（同值跳帧）。
+      setCollapse(previous =>
+        previous.compactChevron === compactChevron
+        && previous.showMeter === showMeter
+        && previous.compactLabel === compactLabel
+          ? previous
+          : { compactChevron, showMeter, compactLabel })
     }
 
     measure()

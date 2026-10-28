@@ -159,53 +159,46 @@ const PROVIDER_LOGOS: ReadonlyMap<string, string> = new Map<string, string>(Obje
 </svg>`,
 }));
 
+/**
+ * 前缀/变体智能归一：注册表 id 未收录时按前缀匹配品牌。
+ * （如 `opencode-go-anthropic` 自动匹配 `opencode`；表序即优先级。）
+ */
+const PROVIDER_LOGO_PREFIXES: ReadonlyArray<readonly [prefix: string, logoKey: string]> = [
+  ['opencode', 'opencode'],
+  ['anthropic', 'anthropic'],
+  ['openai', 'openai'],
+  ['deepseek', 'deepseek'],
+  ['google', 'google'],
+  ['qwen', 'qwen'],
+  ['moonshot', 'moonshotai'],
+  ['minimax', 'minimax'],
+  ['volcengine', 'volcengine'],
+  ['ark', 'volcengine'],
+  ['xiaomi', 'xiaomi'],
+  ['zai', 'zai'],
+]
+
 /** 解析 providerId 对应的 SVG；未收录返回 null（调用方回退首字母）。 */
 export function resolveProviderLogo(providerId: string | null | undefined): string | null {
   const id = (providerId ?? '').trim().toLowerCase()
   if (id === '') return null
-  const key = PROVIDER_LOGO_ALIAS.get(id) ?? id
-  const direct = PROVIDER_LOGOS.get(key)
+  const direct = PROVIDER_LOGOS.get(PROVIDER_LOGO_ALIAS.get(id) ?? id)
   if (direct !== undefined) return direct
-
-  // 前缀/变体智能归一：如 opencode-go-anthropic 自动匹配 opencode
-  if (id.startsWith('opencode')) return PROVIDER_LOGOS.get('opencode') ?? null
-  if (id.startsWith('anthropic')) return PROVIDER_LOGOS.get('anthropic') ?? null
-  if (id.startsWith('openai')) return PROVIDER_LOGOS.get('openai') ?? null
-  if (id.startsWith('deepseek')) return PROVIDER_LOGOS.get('deepseek') ?? null
-  if (id.startsWith('google')) return PROVIDER_LOGOS.get('google') ?? null
-  if (id.startsWith('qwen')) return PROVIDER_LOGOS.get('qwen') ?? null
-  if (id.startsWith('moonshot')) return PROVIDER_LOGOS.get('moonshotai') ?? null
-  if (id.startsWith('minimax')) return PROVIDER_LOGOS.get('minimax') ?? null
-  if (id.startsWith('volcengine') || id.startsWith('ark')) return PROVIDER_LOGOS.get('volcengine') ?? null
-  if (id.startsWith('xiaomi')) return PROVIDER_LOGOS.get('xiaomi') ?? null
-  if (id.startsWith('zai')) return PROVIDER_LOGOS.get('zai') ?? null
+  for (const [prefix, key] of PROVIDER_LOGO_PREFIXES) {
+    if (id.startsWith(prefix)) return PROVIDER_LOGOS.get(key) ?? null
+  }
   return null
 }
 
 /** 左栏/触发按钮提供方 logo：命中渲染内联 SVG（aria-hidden，色彩继承文本色），未命中回退首字母文本。
- * M-056：small=true 为触发按钮 14px 小档，logo 与首字母回退同用 `.dsh003-provider-logo--sm` 盒。 */
+ * M-056：small=true 为触发按钮 16px 小档，logo 与首字母回退同用 `--sm` 盒。 */
 export function ProviderLogo(props: { providerId: string; name: string; small?: boolean }): React.ReactNode {
-  if (isMagpieRoute(props.providerId)) {
-    const cls = props.small === true ? 'dsh003-provider-logo dsh003-provider-logo--sm' : 'dsh003-provider-logo'
-    return <span className={cls} aria-hidden="true" dangerouslySetInnerHTML={{ __html: magpieSvg }} />
+  const small = props.small === true
+  const cls = small ? 'dsh003-provider-logo dsh003-provider-logo--sm' : 'dsh003-provider-logo'
+  const svg = isMagpieRoute(props.providerId) ? magpieSvg : resolveProviderLogo(props.providerId)
+  if (svg !== null) {
+    return <span className={cls} aria-hidden="true" dangerouslySetInnerHTML={{ __html: svg }} />
   }
-  const svg = resolveProviderLogo(props.providerId)
-  const cls = props.small === true ? 'dsh003-provider-logo dsh003-provider-logo--sm' : 'dsh003-provider-logo'
-  if (svg === null) {
-    if (props.small === true) {
-      return (
-        <span className="dsh003-provider-initial dsh003-provider-initial--sm" aria-hidden="true">
-          {providerInitial(props.name)}
-        </span>
-      )
-    }
-    return <span className="dsh003-provider-initial" aria-hidden="true">{providerInitial(props.name)}</span>
-  }
-  return (
-    <span
-      className={cls}
-      aria-hidden="true"
-      dangerouslySetInnerHTML={{ __html: svg }}
-    />
-  )
+  const initialCls = small ? 'dsh003-provider-initial dsh003-provider-initial--sm' : 'dsh003-provider-initial'
+  return <span className={initialCls} aria-hidden="true">{providerInitial(props.name)}</span>
 }

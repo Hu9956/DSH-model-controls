@@ -13,10 +13,10 @@ import { compactModelName, isMagpieRoute, splitMagpieModelName } from './magpie-
 import { compactNamesEnabled } from './compact-names'
 import { effortKeyOf, effortMeterHeight, effortProgress } from './effort-labels'
 import { useButtonCollapse } from './use-effort-truncation'
-import { format, pickerZh, type PickerKey, type Translate } from './locales'
+import { format, pickerFallback, type PickerKey, type Translate } from './locales'
 
 /** 未注入语言服务时的兜底（测试或无 locale 的宿主）。 */
-const fallbackTranslate: Translate<PickerKey> = (key, params) => format(pickerZh[key], params)
+const fallbackTranslate = pickerFallback
 
 
 /** 组件 props：M-049 起 locked 由座位 owner share 透传（原生 disabled 对齐官方触发器）。 */
@@ -29,8 +29,6 @@ export interface ModelPickerButtonProps {
 }
 
 export function ModelPickerButton({ locked = false, directory, t = fallbackTranslate }: ModelPickerButtonProps): React.ReactNode {
-  const interactionLocked = React.useRef(locked)
-  interactionLocked.current = locked
   const adapter = React.useMemo(() => createCatalogAdapter(directory), [directory])
   const catalog = React.useSyncExternalStore(adapter.subscribe, adapter.getSnapshot)
   const [selectionError, setSelectionError] = React.useState<string | null>(null)
@@ -41,7 +39,7 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
     return () => { selectionRequest.current += 1 }
   }, [adapter])
   const submit = (provider: string, model: string, effort?: string): void => {
-    if (interactionLocked.current) return
+    if (locked) return
     const request = ++selectionRequest.current
     setSelectionError(null)
     void adapter.select(provider, model, effort).then(ok => {
@@ -66,7 +64,7 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
   React.useEffect(() => { adapter.load() }, [adapter])
 
   const toggle = (): void => {
-    if (interactionLocked.current) return
+    if (locked) return
     if (open) {
       closeMenu()
       return
@@ -126,29 +124,30 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
     }
   }, [open, closeMenu])
 
+  const selection = catalog.default
   const currentGroup = React.useMemo(() => {
-    if (catalog.default === null) return undefined
-    return catalog.groups.find(g => g.id === catalog.default?.provider)
-  }, [catalog])
+    if (selection === null) return undefined
+    return catalog.groups.find(g => g.id === selection.provider)
+  }, [catalog.groups, selection])
   const currentModel = React.useMemo(() => {
-    if (catalog.default === null) return undefined
-    return currentGroup?.models.find(m => m.id === catalog.default?.model)
-  }, [catalog, currentGroup])
+    if (selection === null) return undefined
+    return currentGroup?.models.find(m => m.id === selection.model)
+  }, [selection, currentGroup])
   const currentModelName = React.useMemo(() => {
-    if (catalog.default === null) return null
+    if (selection === null) return null
     if (currentModel !== undefined) return currentModel.name
     // default 路由不在已公布分组里（仍可服务）：回退显示模型 id
-    return catalog.default.model
-  }, [catalog, currentModel])
+    return selection.model
+  }, [selection, currentModel])
   const currentEffortName = React.useMemo(() => {
-    if (catalog.default === null) return null
+    if (selection === null) return null
     const reasoning = currentModel?.reasoning
     if (reasoning === undefined || reasoning.efforts.length <= 1) return null
-    const effectiveEffort = catalog.default.reasoningEffort ?? reasoning.defaultEffort
+    const effectiveEffort = selection.reasoningEffort ?? reasoning.defaultEffort
     if (effectiveEffort === undefined) return null
     const effort = reasoning.efforts.find(e => e.id === effectiveEffort)
     return effort?.name ?? effectiveEffort
-  }, [catalog, currentModel])
+  }, [selection, currentModel])
 
   /** 按钮显示的模型名：开关关闭时用完整上游名；开启时只压缩模型那一段，
    * `· 路由来源` 原样保留（供应商不改）。Magpie 的显示名是「模型 · 路由来源」，
@@ -156,12 +155,12 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
   const buttonModelName = React.useMemo(() => {
     if (currentModelName === null) return null
     if (!compactNamesEnabled()) return currentModelName
-    const split = isMagpieRoute(catalog.default?.provider ?? '')
+    const split = isMagpieRoute(selection?.provider ?? '')
       ? splitMagpieModelName(currentModelName)
       : null
     if (split === null) return compactModelName(currentModelName)
     return `${compactModelName(split.model)} \u00b7 ${split.route}`
-  }, [catalog.default?.provider, currentModelName])
+  }, [selection?.provider, currentModelName])
 
   /**
    * 这个模型**没有任何**思考档位（不是「关闭」，而是根本没有这个概念）。
@@ -198,19 +197,19 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
   const buttonEffortProgress = React.useMemo(() => {
     if (hasNoEfforts) return 0
     const reasoning = currentModel?.reasoning
-    const effort = catalog.default?.reasoningEffort ?? reasoning?.defaultEffort
+    const effort = selection?.reasoningEffort ?? reasoning?.defaultEffort
     if (reasoning === undefined || reasoning.efforts.length <= 1) return null
     return effortProgress(reasoning.efforts.map(e => e.id), effort)
-  }, [catalog.default?.reasoningEffort, currentModel, hasNoEfforts])
+  }, [selection?.reasoningEffort, currentModel, hasNoEfforts])
 
   /** 实际画出来的高度：与滑杆同刻度，但最低的有效档也看得见。 */
   const buttonMeterHeight = React.useMemo(() => {
     if (hasNoEfforts) return 0
     const reasoning = currentModel?.reasoning
-    const effort = catalog.default?.reasoningEffort ?? reasoning?.defaultEffort
+    const effort = selection?.reasoningEffort ?? reasoning?.defaultEffort
     if (reasoning === undefined || reasoning.efforts.length <= 1) return null
     return effortMeterHeight(reasoning.efforts.map(e => e.id), effort)
-  }, [catalog.default?.reasoningEffort, currentModel, hasNoEfforts])
+  }, [selection?.reasoningEffort, currentModel, hasNoEfforts])
 
   /** 折叠判定：按实测溢出量决定收箭头 / 换竖条，详见 use-effort-truncation.ts。 */
   const logoProbeRef = React.useRef<HTMLSpanElement | null>(null)
@@ -233,21 +232,21 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
   const showEffortMeter = buttonEffortProgress !== null && collapse.showMeter
 
   /** 悬停提示保留完整信息：上游全名 + 档位，不跟按钮一起压缩。 */
-  const buttonTitle = hasNoEfforts
-    ? `${currentModelName ?? t('modelFallback')} · ${t('effortNoneTitle')}`
-    : currentEffortName === null
-      ? (currentModelName ?? t('modelFallback'))
-      : `${currentModelName ?? t('modelFallback')} · ${currentEffortName}`
+  const buttonTitle = React.useMemo(() => {
+    const model = currentModelName ?? t('modelFallback')
+    if (hasNoEfforts) return `${model} · ${t('effortNoneTitle')}`
+    return currentEffortName === null ? model : `${model} · ${currentEffortName}`
+  }, [currentModelName, currentEffortName, hasNoEfforts, t])
 
   const pick = (providerId: string, modelId: string): void => {
     // no-op 语义：重复提交会把思考强度重置为模型默认（上游 route 变更清 effort 语义的同源风险）
-    if (catalog.default !== null && catalog.default.provider === providerId && catalog.default.model === modelId) return
+    if (selection !== null && selection.provider === providerId && selection.model === modelId) return
     submit(providerId, modelId)
   }
 
   const handleSelectEffort = (effortId: string): void => {
-    if (catalog.default === null || effortId === catalog.default.reasoningEffort) return
-    submit(catalog.default.provider, catalog.default.model, effortId)
+    if (selection === null || effortId === selection.reasoningEffort) return
+    submit(selection.provider, selection.model, effortId)
   }
 
   return (
@@ -319,7 +318,7 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
           failures={catalog.failures}
           onReload={adapter.load}
           providers={catalog.groups}
-          current={catalog.default}
+          current={selection}
           containerStyle={pos}
           onPick={pick}
           onSelectEffort={handleSelectEffort}

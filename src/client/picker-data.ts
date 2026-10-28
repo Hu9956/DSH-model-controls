@@ -78,15 +78,15 @@ function readStoredEfforts(): Record<string, string> {
 
 let effortsSnapshot: Record<string, string> = readStoredEfforts()
 
-/** 获取特定模型已记忆的思考强度（若从未设定过则返回 undefined）。 */
+/** 获取特定模型已记忆的思考强度（若从未设定过则返回 undefined）。
+ * 键复用 favoriteKeyOf 的 provider/model 组合格式（与收藏键同一命名空间，跨提供方唯一）。 */
 export function getModelEffort(providerId: string, modelId: string): string | undefined {
-  const key = favoriteKeyOf(providerId, modelId)
-  return effortsSnapshot[key]
+  return effortsSnapshot[favoriteKeyOf(providerId, modelId)]
 }
 
 /** 记录特定模型的思考强度并持久化到 localStorage。 */
 export function setModelEffort(providerId: string, modelId: string, effortId: string): void {
-  const key = favoriteKeyOf(providerId, modelId)
+  const key = favoriteKeyOf(providerId, modelId) // 见 getModelEffort：复用收藏键格式
   if (effortsSnapshot[key] === effortId) return
   effortsSnapshot = {
     ...effortsSnapshot,
