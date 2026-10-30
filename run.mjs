@@ -18,4 +18,5 @@ for (const [tool, ...args] of commands[mode]) {
 if (mode === 'bundle') {
   mkdirSync(resolve(here, 'lib'), { recursive: true })
   copyFileSync(resolve(here, 'src/index.js'), resolve(here, 'lib/index.js'))
+  copyFileSync(resolve(here, 'src/prefs.js'), resolve(here, 'lib/prefs.js'))
 }

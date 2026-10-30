@@ -1,6 +1,6 @@
 {
   "name": "@kewen/dsh-model-controls",
-  "version": "0.2.37",
+  "version": "0.2.44",
   "private": true,
   "description": "DSH 模型控制器：切换模型、调节思考强度、收藏模型与调整供应商顺序。",
   "icon": "./assets/icon.svg",
@@ -52,6 +52,7 @@
   },
   "files": [
     "lib/index.js",
+    "lib/prefs.js",
     "lib/client.js",
     "lib/client.js.map",
     "MAGPIE_ASSET_LICENSE.md",
@@ -62,7 +63,8 @@
     "LICENSE"
   ],
   "dependencies": {
-    "@deepseek-ai/schemastery": "3.18.4"
+    "@deepseek-ai/schemastery": "3.18.4",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.4",

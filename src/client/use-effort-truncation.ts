@@ -105,6 +105,24 @@ const ABSOLUTE_CAP = 360
  */
 const MIN_LABEL_ROOM = 12
 
+/**
+ * 模型名自身的宽度上限（像素），CSS 的 `.dsh003-picker-btn-label` 同用此值。
+ *
+ * ## 为什么名字要单独限宽
+ *
+ * 按钮上限在宽屏下是 360px，长名字（`opus-5.5 · Kiro · Remote magpie`）会完整
+ * 铺开，换个模型按钮宽度就跟着大变，右侧控件随之跳动。给名字一个固定上限后，
+ * 宽屏下按钮的视觉分量恒定；超出部分用省略号，完整名字留在 `title` 里。
+ *
+ * 档位文字**不受**这个上限约束：它是本次发送最相关、变化最频繁的信息，
+ * 只有窄窗口里连截断后的名字都放不下时才换成竖条。
+ *
+ * 150px 约 21 个字符（对齐 HANA agent 的同类按钮）：`DeepSeek-V4.1-Flash`
+ * 这类单独的模型名能完整显示；带 `· 路由来源` 时通常截掉的是后缀。
+ * 180px 试装后观感偏长，0.2.39 收到 150px。
+ */
+export const LABEL_MAX = 150
+
 
 /** 按钮内部的折叠状态。 */
 export interface ButtonCollapse {
@@ -207,7 +225,9 @@ export function useButtonCollapse(
     compactLabel: false,
   })
 
-  React.useEffect(() => {
+  // useLayoutEffect：换模型后要在**绘制前**按新名字重算折叠形态。用 useEffect 时，第一帧会沿用
+  // 上一个模型的形态（长名字的竖条套在短名字上），约 30ms 后才换成文字，手机上看得出闪一下。
+  React.useLayoutEffect(() => {
     let row: HTMLElement | null = null
 
     const measure = (): void => {
@@ -265,7 +285,11 @@ export function useButtonCollapse(
       //
       // 改为与名字宽度比较：名字完整宽度是模型自身的属性，与当前选的是哪一档
       // 无关，所以同一模型内换档位形态不变。
-      const nameWidth = widthOf(probes.label.current)
+      //
+      // 名字有自身上限 LABEL_MAX：宽屏下它被截到上限就不再变长，因此判据按
+      // 「截断后的名字」算。否则长名字会在宽屏上也一直把档位文字挤成竖条。
+      const fullNameWidth = widthOf(probes.label.current)
+      const nameWidth = fullNameWidth === null ? null : Math.min(fullNameWidth, LABEL_MAX)
       const NEEDED_WITH_TEXT = base + gap * 3 + effortWidth + chevron
       // 名字放不下（还差一点）时换竖条。留 1px 余量避免亚像素抖动。
       const showMeter = hasEffort && nameWidth !== null

@@ -2,6 +2,8 @@
  * 模型选择器样式（--dsw-alias-* 语义色 + --dshT3-* 圆角，深色模式零特判）。
  * 结构：① 触发按钮 ② 面板浮层 ③ 两栏主体 ④ 模型行 ⑤ 底部占位。
  */
+import { LABEL_MAX } from './use-effort-truncation'
+
 export const pickerCss = `
 
 /* ① 组合容器（M-049）：两入口横排一组，占官方模型位；min-width:0 防挤爆 trailing 行 */
@@ -49,6 +51,13 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   user-select: none !important;
   box-sizing: border-box !important;
   transition: background 120ms ease, color 120ms ease !important;
+}
+/* 触屏点按高亮：安卓 Chrome 默认给可点元素盖一层半透明蓝（rgba(51,181,229,.4)），
+   点模型行时先闪蓝再变成选中灰，看起来就是「闪一下」。按钮和面板自带按下/选中态，关掉系统那层。 */
+.dsh003-picker-btn,
+.dsh003-picker-panel,
+.dsh003-picker-panel * {
+  -webkit-tap-highlight-color: transparent !important;
 }
 .dsh003-picker-btn:hover:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover) !important;
@@ -190,9 +199,12 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
 }
 
 .dsh003-picker-btn-label {
-  /* 可以一路缩到 0：这是「慢慢缩进」的主体，由省略号连续表达。 */
+  /* 可以一路缩到 0：这是「慢慢缩进」的主体，由省略号连续表达。
+     max-width 是名字自身的固定上限（LABEL_MAX，见 use-effort-truncation.ts）：
+     宽屏下按钮不随模型名长短忽宽忽窄；档位文字不受此约束。 */
   flex: 1 1 auto !important;
   min-width: 0 !important;
+  max-width: ${LABEL_MAX}px !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;

@@ -82,3 +82,43 @@ test('fallback initial retains micro-badge styles', () => {
   assert.match(pickerCss, /\.dsh003-provider-initial--sm\s*\{[^}]*width:\s*16px/)
   assert.match(pickerCss, /\.dsh003-provider-initial--sm\s*\{[^}]*font-size:\s*11px/)
 })
+
+// 官方 ModelDirectory.select 的真实时序：RPC 返回时先清 pending，新 current 约 30ms 后随会话投影到达。
+// 中间这一帧若回落到旧 current，按钮会「新 → 旧 → 新」闪一下（手机上表现为左右跳动）。
+test('accepted switch keeps showing the new model until the projection lands', () => {
+  const { directory, publish } = fixture('hold')
+  const adapter = createCatalogAdapter(directory)
+  assert.equal(adapter.getSnapshot().default?.model, 'a')
+  publish({ pending: { provider: 'hold', model: 'b' }, status: 'selecting' })
+  assert.equal(adapter.getSnapshot().default?.model, 'b')
+  publish({ pending: null, status: 'ready' }) // current 仍是 a：投影还没到
+  assert.equal(adapter.getSnapshot().default?.model, 'b')
+  publish({ status: 'ready', groups: [...directory.store.getSnapshot().groups] }) // 期间的其他刷新也不回落
+  assert.equal(adapter.getSnapshot().default?.model, 'b')
+  publish({ current: { provider: 'hold', model: 'b' } })
+  assert.equal(adapter.getSnapshot().default?.model, 'b')
+  // 投影到达后放手：之后别处把会话改回 a，要如实显示。
+  publish({ current: { provider: 'hold', model: 'a', reasoningEffort: 'low' } })
+  assert.equal(adapter.getSnapshot().default?.model, 'a')
+})
+test('failed switch falls back to the confirmed model immediately', () => {
+  const { directory, publish } = fixture('hold-fail')
+  const adapter = createCatalogAdapter(directory)
+  publish({ pending: { provider: 'hold-fail', model: 'b' }, status: 'selecting' })
+  publish({ pending: null, status: 'error', error: 'E: rejected' })
+  assert.equal(adapter.getSnapshot().default?.model, 'a')
+})
+test('held selection expires when the projection never arrives', async () => {
+  const { directory, publish } = fixture('hold-timeout')
+  const adapter = createCatalogAdapter(directory)
+  let notified = 0
+  // 与 useSyncExternalStore 一致：每次通知都读一次快照。
+  const off = adapter.subscribe(() => { notified += 1; adapter.getSnapshot() })
+  publish({ pending: { provider: 'hold-timeout', model: 'b' }, status: 'selecting' })
+  publish({ pending: null, status: 'ready' })
+  assert.equal(adapter.getSnapshot().default?.model, 'b')
+  await new Promise(resolve => setTimeout(resolve, 2100))
+  assert.ok(notified >= 3)
+  assert.equal(adapter.getSnapshot().default?.model, 'a')
+  off()
+})

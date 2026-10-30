@@ -4,7 +4,9 @@
  * 组件经 useSyncExternalStore 订阅（快照引用稳定纪律：变更时新建 Set）。
  * M-121：模型思考强度独立记忆（Per-Model Sticky Memory）——localStorage 落盘，
  * 记录用户为特定模型选定的思考强度，隔离跨模型/跨供应商继承污染。
+ * 0.2.42：两项都同步到 DSH 宿主（prefs-sync.ts），localStorage 只做离线缓存。
  */
+import { pushPrefs } from './prefs-sync'
 
 /** 收藏键：提供方 id + 模型 id 组合（跨提供方唯一）。 */
 export function favoriteKeyOf(providerId: string, modelId: string): string {
@@ -54,6 +56,20 @@ export function toggleFavorite(providerId: string, modelId: string): void {
     // 配额满或存储被禁：放弃持久化，本次会话内存态仍生效
   }
   for (const listener of favoriteListeners) listener()
+  pushPrefs({ op: 'favorite', key, on: next.has(key) })
+}
+
+/** 用宿主的收藏覆盖本地（同步写回 localStorage 做离线缓存）。 */
+export function replaceFavorites(keys: readonly string[]): void {
+  const next = new Set(keys)
+  if (next.size === favoriteSnapshot.size && [...next].every(key => favoriteSnapshot.has(key))) return
+  favoriteSnapshot = next
+  try {
+    window.localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify([...next]))
+  } catch {
+    // 存不下只影响离线缓存
+  }
+  for (const listener of favoriteListeners) listener()
 }
 
 // —— M-121：模型思考强度独立记忆（Per-Model Sticky Memory）——
@@ -96,5 +112,21 @@ export function setModelEffort(providerId: string, modelId: string, effortId: st
     window.localStorage.setItem(EFFORTS_STORAGE_KEY, JSON.stringify(effortsSnapshot))
   } catch {
     // 存储配额满或受限时内存态依然生效
+  }
+  pushPrefs({ op: 'effort', key, effort: effortId })
+}
+
+/** 当前全部思考强度记忆（首次合并到宿主时用）。 */
+export function getModelEfforts(): Readonly<Record<string, string>> {
+  return effortsSnapshot
+}
+
+/** 用宿主的思考强度记忆覆盖本地。 */
+export function replaceModelEfforts(efforts: Readonly<Record<string, string>>): void {
+  effortsSnapshot = { ...efforts }
+  try {
+    window.localStorage.setItem(EFFORTS_STORAGE_KEY, JSON.stringify(effortsSnapshot))
+  } catch {
+    // 存不下只影响离线缓存
   }
 }

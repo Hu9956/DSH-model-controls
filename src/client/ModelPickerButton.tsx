@@ -115,7 +115,15 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
       // 1px 容差：亚像素抖动来自子元素高度的小数变化，不是真的滚动。
       if (Math.abs(now.top - anchor.top) > 1 || Math.abs(now.left - anchor.left) > 1) closeMenu()
     }
-    const onReflow = (): void => closeMenu()
+    // 视口变了（拖窗口、手机软键盘弹出/收起）：按按钮的新位置重新摆面板，不关。
+    // 以前直接关：手机上点搜索框弹出键盘 → 视口变矮触发 resize → 面板关掉、键盘跟着收起，面板等于打不开。
+    const onReflow = (): void => {
+      const el = buttonRef.current
+      if (el === null) return
+      const rect = el.getBoundingClientRect()
+      anchorRef.current = rect
+      setPos(pickerPosition(rect, window.innerWidth, window.innerHeight))
+    }
     document.addEventListener('pointerdown', onPointerDown, true)
     document.addEventListener('keydown', onKeyDown)
     window.addEventListener('scroll', onScroll, true)

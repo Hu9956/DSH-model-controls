@@ -488,6 +488,26 @@ test('a long model name hands the effort word to the meter', async () => {
   } finally { restore() }
 })
 
+test('on a wide row a long name is capped and the effort word stays as text', async () => {
+  // 名字有自身上限（LABEL_MAX = 180px）：宽屏下它被截断而不是继续变长，
+  // 档位文字应完整显示。label: 60 → 探针 420px，远超 180px 上限。
+  // 若判据仍按名字完整宽度算，这里会误判成竖条。
+  const restore = stubLayout({ available: 1200, effort: 26, label: 60 })
+  try {
+    const f = fixture()
+    f.publish({
+      current: { provider: 'p', model: 'a', reasoningEffort: 'high' },
+      groups: [{ id: 'p', name: 'Provider', models: [{ id: 'a', name: 'opus-5.5 · Kiro · Remote magpie and a very long tail',
+        reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'low' } }] }],
+    })
+    await render(f.directory)
+    await action(() => {})
+    assert.equal(query('.dsh003-picker-btn').getAttribute('data-meter'), 'false',
+      'the capped name fits, so the effort word must stay readable')
+    assert.equal(query('.dsh003-picker-btn-effort').textContent, '高')
+  } finally { restore() }
+})
+
 test('a short model name keeps the word even on a narrow button', async () => {
   // 名字本来就放得下时，竖条没有存在的理由——它只会变成一个没有意义的图形。
   // 这也是「竖条时有时无」的修正：短名字永远保留文字，不再看按钮多宽。
@@ -766,6 +786,23 @@ test('focus enters search, arrows traverse rows, selection retains focus, Escape
   await key(selected, 'Escape')
   assert.equal(query('[role="dialog"]'), null)
   assert.equal(win.document.activeElement, query('.dsh003-picker-btn'))
+})
+test('viewport resize (phone keyboard) keeps the panel open; touch devices do not autofocus search', async () => {
+  const f = fixture(); await render(f.directory); await open()
+  await action(() => win.dispatchEvent(new win.Event('resize')))
+  assert.notEqual(query('[role="dialog"]'), null)
+  await action(() => query('.dsh003-picker-btn').click())
+  const original = win.matchMedia
+  win.matchMedia = q => ({ matches: q === '(pointer: coarse)', media: q, addEventListener() {}, removeEventListener() {} })
+  try {
+    await action(() => query('.dsh003-picker-search')?.blur?.())
+    await action(() => win.document.body.focus())
+    await open()
+    assert.notEqual(query('[role="dialog"]'), null)
+    assert.notEqual(win.document.activeElement, query('.dsh003-picker-search'))
+  } finally {
+    win.matchMedia = original
+  }
 })
 test('keyboard preview commits when focus leaves before keyup', async () => {
   const f = fixture(); await render(f.directory); await open()

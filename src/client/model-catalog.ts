@@ -76,22 +76,88 @@ export function selectCatalogModel(directory: ModelDirectoryFace, provider: stri
   return operation
 }
 
+function sameSelection(a: ModelSelection | null, b: ModelSelection | null): boolean {
+  if (a === null || b === null) return a === b
+  return a.provider === b.provider && a.model === b.model && a.reasoningEffort === b.reasoningEffort
+}
+
+/**
+ * 切换已被接受、但会话投影还没送来新 `current` 的最长等待。投影正常约 30ms 到；
+ * 超时只是兜底（例如连接重置把 pending 清掉、投影不会再来），到点就回到宿主的 current。
+ */
+const HOLD_TIMEOUT_MS = 2000
+
 /** Stable snapshots for useSyncExternalStore, backed by the official session projection. */
 export function createCatalogAdapter(directory: ModelDirectoryFace) {
   let source: DirectoryState | undefined
   let snapshot: CatalogState
+  /**
+   * 官方 `select()` 在 RPC 返回时就把 `pending` 清成 null，而新的 `current` 要等会话历史的
+   * 投影帧才到。这中间约 30ms 里 `pending ?? current` 是**旧**模型：按钮先变成新模型、
+   * 闪回旧模型、再变成新模型，名字宽度不同，按钮就跟着左右跳一下（手机上最明显）。
+   *
+   * 这里记住最近一次 pending 和它出现时的 current（base）。pending 正常清掉（无错误）
+   * 而 current 还停在 base 时，继续显示 pending；current 一变（投影到达或别处改了选择）、
+   * 出错或超时，就放手。
+   */
+  let lastPending: { selection: ModelSelection; base: ModelSelection | null } | null = null
+  let held: { selection: ModelSelection; base: ModelSelection | null } | null = null
+  let holdTimer: ReturnType<typeof setTimeout> | undefined
+  let dirty = false
+  const listeners = new Set<() => void>()
+  const release = (): void => {
+    held = null
+    if (holdTimer !== undefined) clearTimeout(holdTimer)
+    holdTimer = undefined
+  }
+  const shown = (next: DirectoryState): ModelSelection | null => {
+    if (next.pending !== null) {
+      release()
+      if (lastPending === null || !sameSelection(lastPending.selection, next.pending)) {
+        lastPending = { selection: next.pending, base: next.current }
+      }
+      return next.pending
+    }
+    if (lastPending !== null) {
+      // pending 刚清掉：成功（无错误）且 current 仍是旧值 → 进入等待投影。
+      if (next.error === null && sameSelection(next.current, lastPending.base)) {
+        held = lastPending
+        if (holdTimer !== undefined) clearTimeout(holdTimer)
+        holdTimer = setTimeout(() => {
+          holdTimer = undefined
+          if (held === null) return
+          held = null
+          dirty = true
+          for (const fn of listeners) fn()
+        }, HOLD_TIMEOUT_MS)
+      }
+      lastPending = null
+    }
+    if (held !== null) {
+      if (next.error === null && sameSelection(next.current, held.base)) return held.selection
+      release()
+    }
+    return next.current
+  }
   return {
-    subscribe: (fn: () => void) => directory.store.subscribe(fn),
+    subscribe: (fn: () => void) => {
+      listeners.add(fn)
+      const off = directory.store.subscribe(fn)
+      return () => { listeners.delete(fn); off() }
+    },
     getSnapshot: (): CatalogState => {
       const next = directory.store.getSnapshot()
-      if (source !== next) {
+      // shown() 有状态，同一份宿主快照只算一次；等待超时会置 dirty 强制重算。
+      if (source !== next || dirty) {
+        dirty = false
         source = next
+        const selection = shown(next)
         snapshot = {
           status: next.groups.length > 0 ? 'ready' : next.status === 'selecting' ? 'ready' : next.status,
           failures: next.failures,
           partial: next.failures.length > 0,
           groups: next.groups,
-          default: next.pending ?? next.current,
+          default: selection,
           pending: next.pending !== null,
           error: next.error,
         }

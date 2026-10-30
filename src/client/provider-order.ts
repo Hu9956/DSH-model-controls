@@ -1,4 +1,7 @@
-/** Stable client preference; unavailable providers retain their place for recovery. */
+/** Stable client preference; unavailable providers retain their place for recovery.
+ * 0.2.42：顺序同步到 DSH 宿主（prefs-sync.ts），localStorage 只做离线缓存。 */
+import { pushPrefs } from './prefs-sync'
+
 const STORAGE_KEY = 'dsh003.model-picker.provider-order'
 
 export function normalizeProviderOrder(value: unknown): readonly string[] {
@@ -30,15 +33,29 @@ export function orderedProviders<T extends { id: string }>(providers: readonly T
   })
 }
 
-function saveOrder(next: readonly string[]): void {
-  if (next.length === snapshot.length && next.every((id, index) => id === snapshot[index])) return
+function setOrder(next: readonly string[]): boolean {
+  if (next.length === snapshot.length && next.every((id, index) => id === snapshot[index])) return false
   snapshot = next
   try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next)) } catch { /* Keep the in-memory preference if storage is unavailable. */ }
   for (const listener of listeners) listener()
+  return true
 }
 
+function saveOrder(next: readonly string[]): void {
+  if (setOrder(next)) pushPrefs({ op: 'order', order: next })
+}
+
+/** 用宿主的顺序覆盖本地；不回推。 */
+export function replaceProviderOrder(order: readonly string[]): void {
+  setOrder(normalizeProviderOrder(order))
+}
+
+/**
+ * 把新出现的供应商补到末尾。只改本地、不推给宿主：这不是用户的排序操作，
+ * 推上去会让还没同步的设备（手机首次打开时本地是空的）用目录默认顺序盖掉别处排好的顺序。
+ */
 export function rememberProviders(ids: readonly string[]): void {
-  saveOrder(mergeProviderOrder(snapshot, ids))
+  setOrder(mergeProviderOrder(snapshot, ids))
 }
 
 /** Move only visible providers; temporary failures keep their reserved positions. */

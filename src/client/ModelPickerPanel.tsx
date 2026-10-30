@@ -158,7 +158,11 @@ export function ModelPickerPanel(props: {
   const favorites = React.useSyncExternalStore(subscribeFavorites, getFavoriteSet)
   const panelRef = React.useRef<HTMLDivElement | null>(null)
   const searchRef = React.useRef<HTMLInputElement | null>(null)
-  React.useLayoutEffect(() => { searchRef.current?.focus({ preventScroll: true }) }, [])
+  // 触屏（手机、平板）不自动聚焦搜索框：一聚焦就弹出软键盘，挡住半个面板；要搜再点搜索框。
+  React.useLayoutEffect(() => {
+    if (window.matchMedia?.('(pointer: coarse)').matches === true) return
+    searchRef.current?.focus({ preventScroll: true })
+  }, [])
 
   const t = props.t ?? fallbackTranslate
   const onPanelKeyDown = (event: React.KeyboardEvent): void => {

@@ -57,6 +57,8 @@ test('the model name is the only thing that shrinks, and it shrinks continuously
   assert.match(label.get('flex'), /^1 1 auto/, 'the name must be the one that gives width')
   assert.equal(label.get('min-width'), '0', 'otherwise it refuses to shrink below its content')
   assert.match(label.get('text-overflow'), /ellipsis/, 'a continuous, character-by-character shrink')
+  // 名字自身有固定上限，与折叠判定共用同一个常量，两边不会各说各话。
+  assert.equal(label.get('max-width'), '${LABEL_MAX}px', 'the name has its own fixed cap shared with the collapse logic')
 })
 
 test('the effort word never shrinks and leaves last', () => {
@@ -169,4 +171,10 @@ test('the button does not reuse the panel class name', () => {
   // 按钮若共用同名类，两条规则会互相覆盖。
   assert.ok(!/\.dsh003-picker-btn-noeffort\s*\{/.test(css),
     'the button must not introduce a second class for the same slot')
+})
+
+test('触屏点按不出系统蓝色高亮：按钮与面板内元素都关掉 tap highlight', () => {
+  const block = /\.dsh003-picker-btn,\n\.dsh003-picker-panel,\n\.dsh003-picker-panel \* \{([\s\S]*?)\n\}/.exec(css)?.[1]
+  assert.ok(block !== undefined, 'tap highlight reset rule must cover button, panel and descendants')
+  assert.match(block, /-webkit-tap-highlight-color:\s*transparent\s*!important;/)
 })

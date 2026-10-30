@@ -29,6 +29,9 @@ type LocaleApi = {
 import { ModelControlsEntry } from './ModelControlsEntry'
 import type { ModelDirectoryFace } from './model-catalog'
 import { pickerCss } from './picker.css'
+import { startPrefsSync } from './prefs-sync'
+import { getFavoriteSet, getModelEfforts, replaceFavorites, replaceModelEfforts } from './picker-data'
+import { getProviderOrder, replaceProviderOrder } from './provider-order'
 import { ModelControlsSettings, type ControlsForm } from './ModelControlsSettings'
 import {
   PICKER_NS, SETTINGS_NS, format,
@@ -65,6 +68,16 @@ export const inject = ['slots', 'sessions', 'remote', 'remote.session', 'modelDi
 
 export function apply(ctx: ClientContext): void {
   injectStylesOnce()
+  // 收藏 / 思考强度记忆 / 供应商顺序与 DSH 宿主同步，电脑和手机共用一份。
+  // 测试里的假 ctx 没有 effect；真实 cordis 总有。
+  if (typeof ctx.effect === 'function') ctx.effect(() => startPrefsSync({
+    local: () => ({ favorites: [...getFavoriteSet()], efforts: getModelEfforts(), providerOrder: getProviderOrder() }),
+    replace: prefs => {
+      replaceFavorites(prefs.favorites)
+      replaceModelEfforts(prefs.efforts)
+      replaceProviderOrder(prefs.providerOrder)
+    },
+  }), 'model-controls: prefs sync')
 
   try {
     const slots = ctx.get('slots') as SlotsApi | undefined

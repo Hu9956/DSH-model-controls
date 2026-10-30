@@ -1,4 +1,5 @@
 import z from '@deepseek-ai/schemastery'
+import { applyPrefs } from './prefs.js'
 
 /** The official plugin configuration UI projects volatile fields into editable forms. */
 export const Config = z.object({
@@ -70,6 +71,8 @@ function readDeepSeekRoute(ctx) {
 
 /** Host half: publish presentation identities only while their endpoint condition matches. */
 export function apply(ctx, config = {}) {
+  // 偏好存储放在下面的提前 return 之前：没填任何配置的用户同样需要收藏同步。
+  applyPrefs(ctx)
   const providers = config.displayProviders
   if (config.magpieBaseURL === undefined
     && config.compactModelNames === undefined
