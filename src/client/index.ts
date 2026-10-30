@@ -58,8 +58,10 @@ function injectStylesOnce(): void {
 }
 
 // 数组形式的 inject 全是必需服务：任一缺失插件停在 PENDING，apply 不会运行。
-// 不列 remote / remote.session：代码从不读它们，modelDirectories 本身已依赖这两项。
-export const inject = ['slots', 'sessions', 'modelDirectories', 'configForms', 'locale']
+// remote / remote.session 必须列：本插件代码不直接读，但 modelDirectories.directoryFor 是经本插件
+// ctx 的代理执行的，会读 remote.session；不列就抛 `cannot get property "remote.session" without inject`，
+// 官方 SlotErrorBoundary 让本条目让位，按钮退回官方样式（0.2.36 删掉它们，用户 10-30 报「时好时坏」）。
+export const inject = ['slots', 'sessions', 'remote', 'remote.session', 'modelDirectories', 'configForms', 'locale']
 
 export function apply(ctx: ClientContext): void {
   injectStylesOnce()
