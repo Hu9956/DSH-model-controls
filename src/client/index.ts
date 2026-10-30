@@ -29,7 +29,7 @@ type LocaleApi = {
 import { ModelControlsEntry } from './ModelControlsEntry'
 import type { ModelDirectoryFace } from './model-catalog'
 import { pickerCss } from './picker.css'
-import { ModelControlsSettings, type ControlsForm, type ControlsTranslate } from './ModelControlsSettings'
+import { ModelControlsSettings, type ControlsForm } from './ModelControlsSettings'
 import {
   PICKER_NS, SETTINGS_NS, format,
   pickerEn, pickerZh, settingsEn, settingsZh, type PickerKey, type SettingsKey, type Translate,
@@ -57,7 +57,9 @@ function injectStylesOnce(): void {
   document.head.appendChild(style)
 }
 
-export const inject = ['slots', 'sessions', 'remote', 'remote.session', 'modelDirectories', 'configForms', 'locale']
+// 数组形式的 inject 全是必需服务：任一缺失插件停在 PENDING，apply 不会运行。
+// 不列 remote / remote.session：代码从不读它们，modelDirectories 本身已依赖这两项。
+export const inject = ['slots', 'sessions', 'modelDirectories', 'configForms', 'locale']
 
 export function apply(ctx: ClientContext): void {
   injectStylesOnce()
@@ -96,8 +98,9 @@ export function apply(ctx: ClientContext): void {
     }
     const sessions = ctx.get('sessions') as Pick<ISessions, 'subagentAddress'> | undefined
     const directories = ctx.get('modelDirectories') as { directoryFor(sessionId: SessionId): ModelDirectoryFace } | undefined
-    // 宿主缺 modelDirectories 服务时 ctx.get 不抛、返回 undefined——
-    // inject 回调是延迟执行的，外层 try 兜不住，这里必须显式跳过注册。
+    // 真实宿主里服务缺失时插件停在 PENDING、apply 不会运行；这些 undefined 判断只用来兼容
+    // 测试的假 ctx 或非 cordis 调用方（bundle.test 故意不给 locale）。
+    // inject 回调是延迟执行的，外层 try 兜不住，这里仍显式跳过注册。
     if (slots && directories !== undefined && typeof directories.directoryFor === 'function') {
       slots.inject('conversation.input.model', () =>
         slots.register(

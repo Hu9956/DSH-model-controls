@@ -254,7 +254,53 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   transform: rotate(180deg) !important;
 }
 
-/* ② 面板浮层：位置与布局由插件管理；材质、圆角及 macOS backing 由官方 MenuSurface 管理。 */
+/* ②a 菜单材质：官方 MenuSurface.module.css 逐条复制（插件自带的 MenuSurface.tsx 使用），
+   类名换成 dsh003-menu-surface* 前缀。颜色只用 --dsw-alias-*；菜单填充、模糊与圆角在主题里没有 alias 对应项，
+   只能沿用官方菜单同名的 --dsw-menu-* / --dsw-radius-*（换成别的 token 视觉就与官方菜单不一致），
+   逗号后的回退只在宿主缺这些 token 时兜底：alias 不透明底、不模糊、主题当前圆角值。官方 CSS 改动时同步这里。 */
+.dsh003-menu-surface,
+.dsh003-menu-surface-backing {
+  border-radius: var(--dsw-radius-lg, 16px);
+}
+.dsh003-menu-surface-compact {
+  border-radius: var(--dsw-radius-md, 12px);
+}
+:where(.dsh003-menu-surface) {
+  position: relative;
+}
+.dsh003-menu-surface {
+  anchor-name: var(--dsh-menu-anchor);
+  isolation: isolate;
+}
+/* 只给背景层做模糊：嵌套菜单与 fixed 浮层不会因此多出祖先 backdrop root 或新的 fixed 包含块。 */
+.dsh003-menu-surface-material {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-base));
+  backdrop-filter: var(--dsw-menu-backdrop-filter, none);
+  pointer-events: none;
+}
+.dsh003-menu-surface-backing {
+  display: none;
+}
+/* macOS：Chromium 要在原生 vibrancy 上模糊页面，需要页面内容背后有不透明像素。
+   body 的 isolation 让这块 backing 位于原生窗口之上、页面之下；CSS anchor 把它限定在菜单范围内。 */
+html[data-platform='darwin'] .dsh003-menu-surface-backing {
+  display: block;
+  position: fixed;
+  position-anchor: var(--dsh-menu-anchor);
+  top: anchor(top);
+  left: anchor(left);
+  width: anchor-size(width, 0px);
+  height: anchor-size(height, 0px);
+  z-index: -1;
+  background: var(--dsw-alias-bg-base);
+  pointer-events: none;
+}
+
+/* ② 面板浮层：位置与布局由插件管理；材质、圆角及 macOS backing 由 ②a 的 MenuSurface 管理。 */
 .dsh003-picker-panel {
   position: fixed !important;
   z-index: 60 !important;

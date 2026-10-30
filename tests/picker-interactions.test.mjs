@@ -97,7 +97,7 @@ const plugin = descriptor.factory(name => name === '@deepseek-ai/dsh-client-ui-p
     SettingsValueField: ({ id, label, text, invalid, placeholder, onEdit }) => React.createElement(React.Fragment, null,
       React.createElement('label', { htmlFor: id }, label),
       React.createElement('input', { id, value: text, placeholder, 'aria-invalid': invalid, onChange: event => onEdit(event.target.value) })),
-    MenuSurface: React.forwardRef((props, ref) => React.createElement('div', { ...props, ref })), IconChevronDownOutlineRegular: () => null,
+    // MenuSurface 与下拉箭头是插件自带的，宿主表里不再提供，证明插件不依赖它们。
     // Host tooltip stand-in: keeps the anchor's own handlers and exposes what it would show.
     Tooltip: ({ label, disabled, children }) => React.cloneElement(children, {
       'data-tooltip-label': disabled === true ? undefined : label,
@@ -348,6 +348,27 @@ test('the settings page stages and saves the model-name preference', async () =>
   await edit('')
   await action(() => query('form').dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true })))
   assert.deepEqual(calls[1].ops, [{ op: 'unset', path: ['compactModelNames'] }])
+})
+
+test('the address field rejects exactly what the host schema rejects', async () => {
+  // 客户端只靠 new URL 判定时，空的 ? / #、大写协议、路径空格都会被放行，保存时才被 Host 拒。
+  const { Config } = await import('../src/index.js')
+  let state = { status: 'ready', writable: true, revision: 1, base: {}, user: {}, value: { magpieBaseURL: '' } }
+  const form = { getSnapshot: () => state, subscribe: () => () => {}, mutate: async () => true }
+  await action(() => root.render(React.createElement(plugin.ModelControlsSettings, { view: 'page', form, t: key => settingsZh[key] })))
+  const input = query('#dsh-model-controls-magpie')
+  for (const value of [
+    'http://127.0.0.1:3425/v1', 'http://127.0.0.1:3425/v1?', 'http://127.0.0.1:3425/v1#',
+    'Http://127.0.0.1:3425/v1', 'HTTPS://h', 'http://h/a b',
+  ]) {
+    await action(() => {
+      Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set.call(input, value)
+      input.dispatchEvent(new win.Event('input', { bubbles: true }))
+    })
+    let hostAccepts = true
+    try { Config({ magpieBaseURL: value }) } catch { hostAccepts = false }
+    assert.equal(input.getAttribute('aria-invalid') !== 'true', hostAccepts, `client and host disagree on ${value}`)
+  }
 })
 
 test('the model entry keeps its full name when the preference is off', async () => {
@@ -782,6 +803,37 @@ test('the latest failure is still displayed, and success clears it', async () =>
   f.directory.select = async selection => { f.publish({ current: selection }); return { ok: true } }
   await action(() => rows()[2].click())
   assert.equal(query('[role="alert"]'), null)
+})
+test('a switch failure offers no catalog retry and clears when the panel closes', async () => {
+  // 「重试」只会重拉目录，既不重提这次选择也清不掉提示，所以切换失败不配按钮。
+  const f = fixture()
+  f.directory.select = async selection => { f.calls.push(selection); return { ok: false } }
+  await render(f.directory); await open()
+  await action(() => rows()[1].click())
+  const alert = query('[role="alert"]')
+  assert.match(alert.textContent, /切换失败/)
+  assert.equal(alert.querySelector('.dsh003-picker-retry'), null)
+  await open() // 再点按钮即关闭
+  assert.equal(query('[role="dialog"]'), null)
+  await open()
+  assert.equal(query('[role="alert"]'), null, 'a stale switch failure must not reappear')
+})
+test('a switch failure does not hide a catalog error', async () => {
+  const f = fixture()
+  f.directory.select = async selection => { f.calls.push(selection); return { ok: false } }
+  await render(f.directory); await open()
+  await action(() => rows()[1].click())
+  await action(() => f.publish({ error: 'boom' }))
+  const alerts = queryAll('[role="alert"]').map(node => node.textContent)
+  assert.equal(alerts.length, 2)
+  assert.ok(alerts.some(text => /boom/.test(text)))
+  assert.ok(alerts.some(text => /切换失败/.test(text)))
+})
+test('clicking the selected model sends no selection', async () => {
+  // no-op 只在按钮层判断（重复提交会把思考强度重置为默认）；面板原样转发。
+  const f = fixture(); await render(f.directory); await open()
+  await action(() => rows()[0].click())
+  assert.equal(f.calls.length, 0)
 })
 test('a failure from the previous session does not appear in a new directory', async () => {
   const old = fixture(), next = fixture(), response = deferred()
@@ -1362,7 +1414,7 @@ test('long press reorders without switching and persists across reopening and a 
   assert.deepEqual(supplierIds(), expected)
   runInNewContext(readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8'), { document: win.document, Element: win.Element, Node: win.Node, console, ResizeObserver: win.ResizeObserver, window: win })
   const reloaded = descriptor.factory(name => name === '@deepseek-ai/dsh-client-ui-primitives'
-    ? { MenuSurface: React.forwardRef((props, ref) => React.createElement('div', { ...props, ref })), IconChevronDownOutlineRegular: () => null, Tooltip: ({ children }) => children }
+    ? { Tooltip: ({ children }) => children }
     : require(name))
   await action(() => root.render(React.createElement(reloaded.ModelPickerButton, { directory: f.directory })))
   await open()

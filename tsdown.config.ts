@@ -1,10 +1,13 @@
 // Host-shared module identities; React and UI primitives must stay external.
+// primitives 只经 src/client/host-primitives.ts 在 try 里按变量名加载；留在这里是为了万一有人
+// 直接 import 它，也只会外置成 require、不会把宿主包打进产物（primitives-fallback.test 会拦住顶层 require）。
+// dockkit 从未被引用，已删。
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 const PLATFORM_MODULES = [
   'react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', '@deepseek-ai/cordis',
   '@deepseek-ai/dsh-client-store', '@deepseek-ai/dsh-client-ui-slots',
-  '@deepseek-ai/dsh-client-ui-primitives', '@deepseek-ai/dsh-client-ui-dockkit',
+  '@deepseek-ai/dsh-client-ui-primitives',
 ] as const
 
 const id = '@kewen/dsh-model-controls'

@@ -2,7 +2,7 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 
-import { IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChevronDownOutlineRegular } from './chevron-icon'
 
 import { ModelPickerPanel } from './ModelPickerPanel'
 import { pickerPosition } from './picker-position'
@@ -57,6 +57,8 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
 
   const closeMenu = React.useCallback((restoreFocus = false): void => {
     setOpen(false)
+    // 切换失败提示挂在按钮状态上、不随面板卸载；关面板即清掉，下次打开不显示过期提示。
+    setSelectionError(null)
     if (restoreFocus) buttonRef.current?.focus({ preventScroll: true })
   }, [])
 
@@ -74,6 +76,8 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
     const rect = el.getBoundingClientRect()
     anchorRef.current = rect
     setPos(pickerPosition(rect, window.innerWidth, window.innerHeight))
+    // 外部关闭（如 locked）不经 closeMenu，打开时再清一次兜底。
+    setSelectionError(null)
     adapter.load()
     setOpen(true)
   }
@@ -188,28 +192,24 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
   }, [hasNoEfforts, currentEffortName, t])
 
   /**
-   * 竖条填充比例：档位文字被截断时替代它显示。
+   * 竖条的填充比例与实际高度：档位文字被截断时替代它显示。
    *
    * 「没有档位」返回 0——它在竖条形态下画成短轨道、不填充（`data-none`）。
-   * 用 effortMeterHeight 而不是 effortProgress：后者与面板滑杆严格同刻度
-   * （最低档为 0），但 12px 高的竖条分不出「0」与「关闭」，所以绘制时抬到最小可见高度。
+   * progress 用 effortProgress，与面板滑杆严格同刻度（最低档为 0），写进 data-progress；
+   * 绘制高度用 effortMeterHeight：12px 高的竖条分不出「0」与「关闭」，所以抬到最小可见高度。
+   * 两者原先是两个逐行重复的 memo，合并成一处推导，免得以后只改一边导致刻度与高度对不上。
    */
-  const buttonEffortProgress = React.useMemo(() => {
-    if (hasNoEfforts) return 0
+  const effortMeter = React.useMemo(() => {
+    if (hasNoEfforts) return { progress: 0, height: 0 }
     const reasoning = currentModel?.reasoning
-    const effort = selection?.reasoningEffort ?? reasoning?.defaultEffort
     if (reasoning === undefined || reasoning.efforts.length <= 1) return null
-    return effortProgress(reasoning.efforts.map(e => e.id), effort)
+    const ids = reasoning.efforts.map(e => e.id)
+    const effort = selection?.reasoningEffort ?? reasoning.defaultEffort
+    return { progress: effortProgress(ids, effort), height: effortMeterHeight(ids, effort) }
   }, [selection?.reasoningEffort, currentModel, hasNoEfforts])
-
-  /** 实际画出来的高度：与滑杆同刻度，但最低的有效档也看得见。 */
-  const buttonMeterHeight = React.useMemo(() => {
-    if (hasNoEfforts) return 0
-    const reasoning = currentModel?.reasoning
-    const effort = selection?.reasoningEffort ?? reasoning?.defaultEffort
-    if (reasoning === undefined || reasoning.efforts.length <= 1) return null
-    return effortMeterHeight(reasoning.efforts.map(e => e.id), effort)
-  }, [selection?.reasoningEffort, currentModel, hasNoEfforts])
+  // 解构成原始值：下游折叠测量的依赖数组拿对象会每次变化、误触发重测。
+  const buttonEffortProgress = effortMeter?.progress ?? null
+  const buttonMeterHeight = effortMeter?.height ?? null
 
   /** 折叠判定：按实测溢出量决定收箭头 / 换竖条，详见 use-effort-truncation.ts。 */
   const logoProbeRef = React.useRef<HTMLSpanElement | null>(null)
@@ -312,7 +312,8 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
         <ModelPickerPanel
           t={t}
           pending={catalog.pending}
-          error={selectionError ?? catalog.error}
+          catalogError={catalog.error}
+          selectionError={selectionError}
           catalogStatus={catalog.status}
           partial={catalog.partial}
           failures={catalog.failures}

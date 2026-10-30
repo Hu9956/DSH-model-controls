@@ -36,6 +36,7 @@ export type SettingsKey =
   | 'addressHelpAutomatic' | 'addressHelpWhenToFill'
   | 'compactNamesLabel' | 'compactNamesHint' | 'compactNamesPlaceholder' | 'compactNamesHelpLabel'
   | 'compactNamesHelpOn' | 'compactNamesHelpOff' | 'compactNamesInvalid'
+  | 'formUnavailable'
 
 /** English copy for the settings page. */
 export const settingsEn: Record<SettingsKey, string> = {
@@ -60,6 +61,7 @@ export const settingsEn: Record<SettingsKey, string> = {
   compactNamesHelpOn: 'On (default) drops a redundant brand prefix from the model entry, so a narrower entry leaves more room for the input. The model list, search matching and every request keep the upstream name.',
   compactNamesHelpOff: 'Off shows the full upstream name on the model entry, exactly as the provider reports it.',
   compactNamesInvalid: 'Enter on or off, or clear the field to use the default.',
+  formUnavailable: 'Settings cannot be shown in this version of DeepSeek Harness. The model picker still works.',
 }
 
 /** Simplified Chinese copy for the settings page. */
@@ -85,6 +87,7 @@ export const settingsZh: Record<SettingsKey, string> = {
   compactNamesHelpOn: 'on（默认）去掉模型入口上多余的品牌前缀，入口更窄，留更多空间给输入框。模型列表、搜索匹配与所有请求都仍用上游原名。',
   compactNamesHelpOff: 'off 时模型入口显示完整上游名，与提供方上报的名称完全一致。',
   compactNamesInvalid: '填写 on 或 off，或清空此字段使用默认值。',
+  formUnavailable: '当前版本的 DeepSeek Harness 无法显示此设置页，模型选择器仍可正常使用。',
 }
 
 /** Picker-panel locale keys. */

@@ -7,7 +7,8 @@
  * 收藏视图：右栏跨提供方汇总收藏的模型，行两行制（模型名 + 供应商名副行，M-054，行高 36px 不变）。搜索：模型 id/名称（收藏视图含提供方名）子串过滤。
  */
 import * as React from 'react'
-import { MenuSurface, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { MenuSurface } from './MenuSurface'
+import { Tooltip } from './host-primitives'
 
 import { favoriteKeyOf, getFavoriteSet, subscribeFavorites, toggleFavorite } from './picker-data'
 import { isMagpieRoute, magpieGatewayLabel, splitMagpieModelName } from './magpie-display'
@@ -137,6 +138,7 @@ export function ModelPickerPanel(props: {
   current: { provider: string; model: string; reasoningEffort?: string } | null
   /** 弹层定位及可用高度，由触发按钮计算传入。 */
   containerStyle?: React.CSSProperties
+  /** 行点击原样转发；是否 no-op 由调用方决定。 */
   onPick(providerId: string, modelId: string): void
   partial?: boolean
   /** 加载失败的提供方，逐项显示原因并提供重试。 */
@@ -144,7 +146,10 @@ export function ModelPickerPanel(props: {
   /** 重新加载目录；失败行与加载失败都会用到。 */
   onReload?(): void
   pending?: boolean
-  error?: string | null
+  /** 整个目录加载失败的原因；配 onReload 的「重试」按钮。 */
+  catalogError?: string | null
+  /** 模型或档位切换失败的提示；只显示文字，不配重试（重试目录救不回一次切换，重新点选即可）。 */
+  selectionError?: string | null
   onSelectEffort?(effortId: string): void
   onClose(): void
 }): React.ReactNode {
@@ -179,8 +184,12 @@ export function ModelPickerPanel(props: {
     rows[next]?.scrollIntoView({ block: 'nearest' })
   }
 
-  // 打开面板优先定位到当前模型所在的提供方；否则回退到记忆值或第一个
-  const initialProviderId = React.useMemo(() => {
+  // 打开面板优先定位到当前模型所在的提供方；否则回退到记忆值或第一个。
+  // 仅挂载时计算（惰性初值），后续同步见下方 effect——原先写成带依赖的 useMemo，
+  // 重算结果会被 useState 丢弃，容易误读成参与同步。
+  const [favView, setFavView] = React.useState(rememberedFavView)
+  const [query, setQuery] = React.useState('')
+  const [activeProviderId, setActiveProviderId] = React.useState<string>(() => {
     if (current?.provider && providers.some(p => p.id === current.provider)) {
       return current.provider
     }
@@ -188,11 +197,7 @@ export function ModelPickerPanel(props: {
       return rememberedProviderId
     }
     return providerSort.sorted[0]?.id ?? ''
-  }, [current?.provider, providers, providerSort.sorted])
-
-  const [favView, setFavView] = React.useState(rememberedFavView)
-  const [query, setQuery] = React.useState('')
-  const [activeProviderId, setActiveProviderId] = React.useState<string>(initialProviderId)
+  })
 
   const observedProvider = React.useRef(current?.provider)
   // 跟随实际模型切换；目录刷新保留正在浏览的供应商，失效后才回退。
@@ -266,7 +271,7 @@ export function ModelPickerPanel(props: {
       snapIndexRef.current = null
       setSnapIndex(null)
     }
-  }, [props.pending, props.error])
+  }, [props.pending, props.catalogError, props.selectionError])
 
   React.useLayoutEffect(() => {
     cancelDragRef.current?.()
@@ -428,11 +433,7 @@ export function ModelPickerPanel(props: {
   const placeholder = searchPlaceholder(favView, activeProvider ? displayProviderName(activeProvider) : undefined, t)
 
   const pick = (providerId: string, modelId: string): void => {
-    const isCurrent = current?.provider === providerId && current?.model === modelId
-    if (isCurrent) {
-      // 点选当前已选中的模型：纯粹保持选中（no-op），杜绝连击或手抖误触闪退卡片
-      return
-    }
+    // 是否 no-op（点当前模型）由调用方决定，规则与理由见 ModelPickerButton.pick；这里只转发。
     props.onPick(providerId, modelId)
   }
   const toggleStar = (e: React.SyntheticEvent, providerId: string, modelId: string): void => {
@@ -576,14 +577,21 @@ export function ModelPickerPanel(props: {
         <p className="dsh003-picker-notice" role="status">{t('partialProviders')}</p>
       )}
       {/* 整个目录加载失败：给可点的重试，而不是让用户关掉面板重开。 */}
-      {props.error && (
+      {props.catalogError && (
         <p className="dsh003-picker-empty" role="alert">
-          <span>{props.error}</span>
+          <span>{props.catalogError}</span>
           {props.onReload && (
             <button type="button" className="dsh003-picker-retry" onClick={props.onReload}>
               {t('retry')}
             </button>
           )}
+        </p>
+      )}
+      {/* 切换失败单独一行、不带按钮：「重试」只会重拉目录，既不重提这次选择也清不掉提示。
+          两行可同时出现，避免切换错误盖住真正的目录错误。 */}
+      {props.selectionError && (
+        <p className="dsh003-picker-empty" role="alert">
+          <span>{props.selectionError}</span>
         </p>
       )}
       <div className={`dsh003-picker-foot ${hasEfforts ? '' : 'dsh003-picker-foot-disabled'}`}>
