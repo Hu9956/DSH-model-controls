@@ -1231,6 +1231,30 @@ test('every Magpie protocol route shows the Magpie icon instead of a bare initia
   }
 })
 
+test('Magpie protocol routes carry R / A badges in the rail; the default route and the button stay plain', async () => {
+  const f = fixture()
+  const groups = [
+    { id: 'magpie', name: 'Magpie', models: [{ id: 'a', name: 'Model a' }] },
+    { id: 'magpie-responses', name: 'Magpie · Responses', models: [{ id: 'b', name: 'Model b' }] },
+    { id: 'magpie-anthropic', name: 'Magpie · Anthropic', models: [{ id: 'c', name: 'Model c' }] },
+    { id: 'azure-openai-responses', name: 'Azure', models: [{ id: 'd', name: 'Model d' }] },
+  ]
+  f.publish({ current: { provider: 'magpie-anthropic', model: 'c' }, groups })
+  await render(f.directory); await open()
+  const badgeOf = id => query(`[data-provider-id="${id}"] [data-protocol-badge]`)?.getAttribute('data-protocol-badge') ?? null
+  assert.equal(badgeOf('magpie'), null, 'the default route has no badge')
+  assert.equal(badgeOf('magpie-responses'), 'R')
+  assert.equal(badgeOf('magpie-anthropic'), 'A')
+  assert.equal(badgeOf('azure-openai-responses'), null, 'a provider whose icon is unique has no badge')
+  // 角标只是视觉区分；读屏仍读完整名字，按钮本身不带角标。
+  assert.equal(query('[data-provider-id="magpie-anthropic"]').getAttribute('aria-label'), 'Magpie · Anthropic')
+  assert.equal(query('.dsh003-picker-btn [data-protocol-badge]'), null)
+  // 每个角标的 mask id 唯一，避免多个内联 SVG 互相引用错。
+  const masks = [...document.querySelectorAll('.dsh003-provider-badge mask')].map(m => m.id)
+  assert.equal(masks.length, 2)
+  assert.equal(new Set(masks).size, masks.length)
+})
+
 test('a Magpie model splits into two lines in the supplier view, other suppliers stay one line', async () => {
   const f = fixture()
   f.publish({

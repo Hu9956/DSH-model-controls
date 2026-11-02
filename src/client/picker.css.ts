@@ -466,6 +466,32 @@ html[data-platform='darwin'] .dsh003-menu-surface-backing {
   font-weight: 700 !important;
   line-height: 1 !important;
 }
+/* 协议角标：同网关按协议拆出的路由图标相同，右下角 12px 实心圆 + 镂空字母（R / A）区分。
+   图标在角标处挖一个半径 7.5px 的圆缺口（比角标大 1.5px），两者之间留出底色缝隙，不糊在一起。
+   全部继承文本色（secondary → hover/active primary），明暗主题与选中态零特判。 */
+.dsh003-provider-mark {
+  position: relative !important;
+  display: block !important;
+  width: 20px !important;
+  height: 20px !important;
+  flex: none !important;
+  pointer-events: none !important;
+}
+.dsh003-provider-mark > .dsh003-provider-logo,
+.dsh003-provider-mark > .dsh003-provider-initial {
+  width: 100% !important;
+  height: 100% !important;
+  -webkit-mask: radial-gradient(circle at 18px 18px, transparent 7.5px, #000 8px) !important;
+  mask: radial-gradient(circle at 18px 18px, transparent 7.5px, #000 8px) !important;
+}
+.dsh003-provider-badge {
+  position: absolute !important;
+  right: -4px !important;
+  bottom: -4px !important;
+  width: 12px !important;
+  height: 12px !important;
+  display: block !important;
+}
 /* 触发按钮首字兜底微型徽标：16px 微圆角卡片，对齐左栏 36px 方框语言，中英文字号 11px 清晰不缩水 */
 .dsh003-provider-initial--sm {
   width: 16px !important;

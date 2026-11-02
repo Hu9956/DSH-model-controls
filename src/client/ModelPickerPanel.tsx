@@ -13,7 +13,8 @@ import { Tooltip } from './host-primitives'
 import { favoriteKeyOf, getFavoriteSet, subscribeFavorites, toggleFavorite } from './picker-data'
 import { isMagpieRoute, magpieGatewayLabel, splitMagpieModelName } from './magpie-display'
 import { effortKeyOf } from './effort-labels'
-import { ProviderLogo } from './provider-logos'
+import { ProviderLogo, providerIconKey } from './provider-logos'
+import { protocolBadges } from './protocol-badge'
 import { displayProviderIcon, displayProviderName } from './display-identity'
 import { searchPlaceholder } from './search-placeholder'
 import { format, pickerFallback, type PickerKey, type Translate } from './locales'
@@ -155,6 +156,11 @@ export function ModelPickerPanel(props: {
 }): React.ReactNode {
   const { providers, current, catalogStatus } = props
   const providerSort = useProviderSort(providers)
+  // 同一网关按协议拆出的路由图标相同，给撞图标的路由补协议角标（R / A）。
+  const badges = React.useMemo(() => protocolBadges(providers.map(provider => {
+    const icon = displayProviderIcon(provider)
+    return { id: provider.id, iconKey: providerIconKey(icon.providerId, icon.name) }
+  })), [providers])
   const favorites = React.useSyncExternalStore(subscribeFavorites, getFavoriteSet)
   const panelRef = React.useRef<HTMLDivElement | null>(null)
   const searchRef = React.useRef<HTMLInputElement | null>(null)
@@ -489,7 +495,7 @@ export function ModelPickerPanel(props: {
                   setActiveProviderId(provider.id)
                 }}
               >
-                <ProviderLogo {...displayProviderIcon(provider)} />
+                <ProviderLogo {...displayProviderIcon(provider)} badge={badges.get(provider.id)} />
               </button>
             ))}
             {providerSort.drag?.before === null && <span className="dsh003-picker-prov-insert-end" aria-hidden="true" />}

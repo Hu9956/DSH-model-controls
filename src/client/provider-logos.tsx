@@ -17,6 +17,7 @@
 import * as React from 'react'
 import magpieSvg from './magpie.svg?raw'
 import { isMagpieRoute } from './magpie-display'
+import type { ProtocolBadge } from './protocol-badge'
 
 /** 首字母兜底：无 logo 的 provider 渲染展示名首个可见字符（自 ModelPickerPanel 迁入）。 */
 function providerInitial(name: string): string {
@@ -178,27 +179,74 @@ const PROVIDER_LOGO_PREFIXES: ReadonlyArray<readonly [prefix: string, logoKey: s
   ['zai', 'zai'],
 ]
 
-/** 解析 providerId 对应的 SVG；未收录返回 null（调用方回退首字母）。 */
-export function resolveProviderLogo(providerId: string | null | undefined): string | null {
-  const id = (providerId ?? '').trim().toLowerCase()
-  if (id === '') return null
-  const direct = PROVIDER_LOGOS.get(PROVIDER_LOGO_ALIAS.get(id) ?? id)
-  if (direct !== undefined) return direct
+/** 解析 providerId 对应的 logo 键；未收录返回 null。 */
+function resolveProviderLogoKey(id: string): string | null {
+  const direct = PROVIDER_LOGO_ALIAS.get(id) ?? id
+  if (PROVIDER_LOGOS.has(direct)) return direct
   for (const [prefix, key] of PROVIDER_LOGO_PREFIXES) {
-    if (id.startsWith(prefix)) return PROVIDER_LOGOS.get(key) ?? null
+    if (id.startsWith(prefix)) return PROVIDER_LOGOS.has(key) ? key : null
   }
   return null
 }
 
+/** 解析 providerId 对应的 SVG；未收录返回 null（调用方回退首字母）。 */
+export function resolveProviderLogo(providerId: string | null | undefined): string | null {
+  const id = (providerId ?? '').trim().toLowerCase()
+  if (id === '') return null
+  const key = resolveProviderLogoKey(id)
+  return key === null ? null : PROVIDER_LOGOS.get(key) ?? null
+}
+
+/**
+ * 图标身份：两个提供方的键相同，左栏就画出一模一样的图标。
+ * 与 ProviderLogo 的取图顺序一致（Magpie 路由 → 内置 logo → 首字母）。
+ * @param providerId - 取图用的 id（显示身份覆盖后的值）。
+ * @param name - 首字母兜底用的显示名。
+ */
+export function providerIconKey(providerId: string, name: string): string {
+  if (isMagpieRoute(providerId)) return 'magpie'
+  const id = providerId.trim().toLowerCase()
+  const key = id === '' ? null : resolveProviderLogoKey(id)
+  return key === null ? `initial:${providerInitial(name)}` : key
+}
+
+/** 协议角标的字形：12×12 网格里的描边路径，在实心圆上挖空，任何底色上都是镂空字母。
+ * 用路径而非文字：不依赖字体，各平台字重、基线一致。 */
+const BADGE_GLYPHS: Readonly<Record<ProtocolBadge, string>> = {
+  R: 'M4.1 9V3H6.2A1.75 1.75 0 0 1 6.2 6.5H4.1M6 6.5L7.9 9',
+  A: 'M3.7 9L6 3L8.3 9M4.5 7.2H7.5',
+}
+
+/** 右下角协议角标：实心圆 + 镂空字母，颜色继承文本色。mask id 每个实例唯一。 */
+function ProtocolBadgeMark(props: { badge: ProtocolBadge }): React.ReactNode {
+  const maskId = `dsh003-badge-${React.useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
+  return (
+    <svg className="dsh003-provider-badge" viewBox="0 0 12 12" aria-hidden="true">
+      <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width="12" height="12">
+        <rect width="12" height="12" fill="#fff" />
+        <path d={BADGE_GLYPHS[props.badge]} fill="none" stroke="#000" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+      </mask>
+      <circle cx="6" cy="6" r="6" fill="currentColor" mask={`url(#${maskId})`} />
+    </svg>
+  )
+}
+
 /** 左栏/触发按钮提供方 logo：命中渲染内联 SVG（aria-hidden，色彩继承文本色），未命中回退首字母文本。
- * M-056：small=true 为触发按钮 16px 小档，logo 与首字母回退同用 `--sm` 盒。 */
-export function ProviderLogo(props: { providerId: string; name: string; small?: boolean }): React.ReactNode {
+ * M-056：small=true 为触发按钮 16px 小档，logo 与首字母回退同用 `--sm` 盒。
+ * badge：同一网关按协议拆出的路由在左栏图标相同，右下角加协议字母区分（仅左栏使用）。 */
+export function ProviderLogo(props: { providerId: string; name: string; small?: boolean; badge?: ProtocolBadge }): React.ReactNode {
   const small = props.small === true
   const cls = small ? 'dsh003-provider-logo dsh003-provider-logo--sm' : 'dsh003-provider-logo'
   const svg = isMagpieRoute(props.providerId) ? magpieSvg : resolveProviderLogo(props.providerId)
-  if (svg !== null) {
-    return <span className={cls} aria-hidden="true" dangerouslySetInnerHTML={{ __html: svg }} />
-  }
   const initialCls = small ? 'dsh003-provider-initial dsh003-provider-initial--sm' : 'dsh003-provider-initial'
-  return <span className={initialCls} aria-hidden="true">{providerInitial(props.name)}</span>
+  const art = svg !== null
+    ? <span className={cls} aria-hidden="true" dangerouslySetInnerHTML={{ __html: svg }} />
+    : <span className={initialCls} aria-hidden="true">{providerInitial(props.name)}</span>
+  if (props.badge === undefined) return art
+  return (
+    <span className="dsh003-provider-mark" data-protocol-badge={props.badge} aria-hidden="true">
+      {art}
+      <ProtocolBadgeMark badge={props.badge} />
+    </span>
+  )
 }
