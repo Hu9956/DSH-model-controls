@@ -15,6 +15,7 @@ export function pickerPosition(rect: Pick<DOMRect, 'top' | 'bottom' | 'right'>, 
   const inset = 8
   const gap = 4
   const panelWidth = Math.min(320, Math.max(0, width - inset * 2))
+  const panelHeight = 392
 
   // 面板用 `right` 定位：right 越大，面板越靠左。
   const minRight = inset // 面板右缘贴右边距
@@ -30,6 +31,6 @@ export function pickerPosition(rect: Pick<DOMRect, 'top' | 'bottom' | 'right'>, 
   const top = clamp(rect.bottom + gap)
   const above = Math.max(0, height - bottom - inset)
   const below = Math.max(0, height - top - inset)
-  if (above >= 360 || above >= below) return { right, bottom, maxHeight: Math.min(360, above) }
-  return { right, top, maxHeight: Math.min(360, below) }
+  if (above >= panelHeight || above >= below) return { right, bottom, maxHeight: Math.min(panelHeight, above) }
+  return { right, top, maxHeight: Math.min(panelHeight, below) }
 }

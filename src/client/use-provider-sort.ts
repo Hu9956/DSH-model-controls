@@ -96,12 +96,14 @@ export function useProviderSort<T extends { id: string }>(providers: readonly T[
       element.focus({ preventScroll: true })
     }
     const holdTimer = window.setTimeout(() => {
+      if (done) return
       active = true
       blockedClick.current = id
       try { element.setPointerCapture(pointerId) } catch { /* Window listeners still cover the pointer. */ }
       update()
       // Scroll only during a held drag at the edge of the supplier viewport.
       scrollTimer = window.setInterval(() => {
+        if (done || !list.isConnected) { cancel(); return }
         const bounds = list.getBoundingClientRect()
         const direction = y < bounds.top + 18 ? -1 : y > bounds.bottom - 18 ? 1 : 0
         if (direction !== 0) {

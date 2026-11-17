@@ -1,6 +1,6 @@
 /**
- * 模型选择器样式（--dsw-alias-* 语义色 + --dshT3-* 圆角，深色模式零特判）。
- * 结构：① 触发按钮 ② 面板浮层 ③ 两栏主体 ④ 模型行 ⑤ 底部占位。
+ * 模型选择器样式（--dsw-alias-* 语义色 + @kewen/dsh-ui 共享毛玻璃与 --dsh-corner-shape 双轨曲率）。
+ * 结构：① 触发按钮 ② 面板浮层 ③ 两栏主体 ④ 模型行 ⑤ 底部思考强度条 ⑥ 设置页卡片。
  */
 import { LABEL_MAX } from './use-effort-truncation'
 
@@ -40,7 +40,8 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   height: 28px !important;
   padding: 0 4px 0 8px !important;
   border: none !important;
-  border-radius: 24px !important;
+  border-radius: 999px !important;
+  corner-shape: round !important;
   outline: none !important;
   background: transparent !important;
   color: var(--dsw-alias-label-secondary) !important;
@@ -59,8 +60,10 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
 .dsh003-picker-panel * {
   -webkit-tap-highlight-color: transparent !important;
 }
-.dsh003-picker-btn:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover) !important;
+@media (hover: hover) {
+  .dsh003-picker-btn:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover) !important;
+  }
 }
 /* data-open 常驻 hover 底：官方弹层与按钮同根无此需求，我们的面板是分离 portal，
    open 态按钮需要锚定提示（同 token 同 chrome，非新视觉语言） */
@@ -90,6 +93,7 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   height: 12px !important;
   overflow: hidden !important;
   border-radius: 999px !important;
+  corner-shape: round !important;
   background: color-mix(in srgb, var(--dsw-alias-label-primary) 10%, transparent) !important;
 }
 .dsh003-picker-effort-meter-fill {
@@ -98,6 +102,7 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   left: 0 !important;
   width: 100% !important;
   border-radius: 999px !important;
+  corner-shape: round !important;
   background: var(--dsw-static-deepseek-400) !important;
   transition: height 120ms ease !important;
 }
@@ -266,67 +271,31 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   transform: rotate(180deg) !important;
 }
 
-/* ②a 菜单材质：官方 MenuSurface.module.css 逐条复制（插件自带的 MenuSurface.tsx 使用），
-   类名换成 dsh003-menu-surface* 前缀。颜色只用 --dsw-alias-*；菜单填充、模糊与圆角在主题里没有 alias 对应项，
-   只能沿用官方菜单同名的 --dsw-menu-* / --dsw-radius-*（换成别的 token 视觉就与官方菜单不一致），
-   逗号后的回退只在宿主缺这些 token 时兜底：alias 不透明底、不模糊、主题当前圆角值。官方 CSS 改动时同步这里。 */
-.dsh003-menu-surface,
-.dsh003-menu-surface-backing {
-  border-radius: var(--dsw-radius-lg, 16px);
-}
-.dsh003-menu-surface-compact {
-  border-radius: var(--dsw-radius-md, 12px);
-}
-:where(.dsh003-menu-surface) {
-  position: relative;
-}
-.dsh003-menu-surface {
-  anchor-name: var(--dsh-menu-anchor);
-  isolation: isolate;
-}
-/* 只给背景层做模糊：嵌套菜单与 fixed 浮层不会因此多出祖先 backdrop root 或新的 fixed 包含块。 */
-.dsh003-menu-surface-material {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-base));
-  backdrop-filter: var(--dsw-menu-backdrop-filter, none);
-  pointer-events: none;
-}
-.dsh003-menu-surface-backing {
-  display: none;
-}
-/* macOS：Chromium 要在原生 vibrancy 上模糊页面，需要页面内容背后有不透明像素。
-   body 的 isolation 让这块 backing 位于原生窗口之上、页面之下；CSS anchor 把它限定在菜单范围内。 */
-html[data-platform='darwin'] .dsh003-menu-surface-backing {
-  display: block;
-  position: fixed;
-  position-anchor: var(--dsh-menu-anchor);
-  top: anchor(top);
-  left: anchor(left);
-  width: anchor-size(width, 0px);
-  height: anchor-size(height, 0px);
-  z-index: -1;
-  background: var(--dsw-alias-bg-base);
-  pointer-events: none;
-}
-
-/* ② 面板浮层：位置与布局由插件管理；材质、圆角及 macOS backing 由 ②a 的 MenuSurface 管理。 */
+/* ② 面板浮层：位置与布局由插件管理；原版待办栏共享毛玻璃（--dsh-menu-surface-fill + blur(8px) saturate(1.3) + --dsh-glass-shadow）、
+   16px 双轨曲率（--dsh-corner-shape）及 macOS CSS anchor backing 由 @kewen/dsh-ui 的 MenuSurface 管理。 */
 .dsh003-picker-panel {
   position: fixed !important;
   z-index: 60 !important;
   display: flex !important;
   flex-direction: column !important;
   width: min(320px, calc(100vw - 16px)) !important;
-  height: 360px !important;
+  height: 392px !important;
+  padding: 0 !important;
+  gap: 0 !important;
   border: 0 !important;
-  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
-  box-shadow: var(--dsw-elevation-prominent) !important;
   color: var(--dsw-alias-label-primary) !important;
   box-sizing: border-box !important;
-  overflow: hidden !important;
+  overflow: visible !important;
   animation: none !important;
+}
+.dsh003-picker-inner {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  border-radius: inherit !important;
+  corner-shape: round !important;
+  overflow: clip !important;
 }
 
 /* ③ 两栏主体（M2-005a 修订：两栏自面板顶部贯通——左栏收藏+提供方，右栏搜索+模型列表） */
@@ -356,6 +325,11 @@ html[data-platform='darwin'] .dsh003-menu-surface-backing {
   margin: 0 8px !important;
   background: var(--dsw-alias-border-l1) !important;
 }
+.dsh003-picker-prov-scroll,
+.dsh003-picker-model-scroll {
+  flex: 1 !important;
+  min-height: 0 !important;
+}
 .dsh003-picker-prov-list {
   flex: 1 !important;
   min-height: 0 !important;
@@ -379,7 +353,8 @@ html[data-platform='darwin'] .dsh003-menu-surface-backing {
   height: 36px !important;
   flex: none !important;
   border: 1px solid var(--dsw-alias-border-l1) !important;
-  border-radius: var(--dshT3-radius-md, 8px) !important;
+  border-radius: var(--dsw-radius-sm, 8px) !important;
+  corner-shape: var(--dsh-corner-shape, var(--dsw-corner-shape, round)) !important;
   background: transparent !important;
   color: var(--dsw-alias-label-secondary) !important;
   font-size: 13px !important;
@@ -420,7 +395,12 @@ html[data-platform='darwin'] .dsh003-menu-surface-backing {
   flex: none !important;
   margin-top: -2px !important;
 }
-.dsh003-picker-prov:hover,
+@media (hover: hover) {
+  .dsh003-picker-prov:hover {
+    background: var(--dsw-alias-interactive-bg-hover) !important;
+    color: var(--dsw-alias-label-primary) !important;
+  }
+}
 .dsh003-picker-prov:focus-visible {
   background: var(--dsw-alias-interactive-bg-hover) !important;
   color: var(--dsw-alias-label-primary) !important;
@@ -429,9 +409,9 @@ html[data-platform='darwin'] .dsh003-menu-surface-backing {
   background: var(--dsw-alias-interactive-bg-hover) !important;
   color: var(--dsw-alias-label-primary) !important;
 }
-/* 收藏项（左栏首项）：与提供方块同语言，激活时黄色实心星（M-053：星色语义统一黄系） */
+/* 收藏项（左栏首项）：与提供方块同语言，激活时宿主语义暖黄实心星（M-053：星色语义统一黄系） */
 .dsh003-picker-prov-fav[data-active="true"] {
-  color: var(--dshT3-warning, #f59e0b) !important;
+  color: var(--dsw-alias-state-warn-primary) !important;
 }
 /* 提供方 logo（M-051）：内联 SVG fill=currentColor，色彩继承按钮文本色
    （secondary → hover/active primary），明暗主题零特判；20px 见方居中于 36px 按钮内盒 */
@@ -500,7 +480,8 @@ html[data-platform='darwin'] .dsh003-menu-surface-backing {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  border-radius: var(--dshT3-radius-sm, 4px) !important;
+  border-radius: var(--dsw-radius-xs, 4px) !important;
+  corner-shape: var(--dsh-corner-shape, var(--dsw-corner-shape, round)) !important;
   background: var(--dsw-alias-interactive-bg-hover) !important;
   border: 1px solid var(--dsw-alias-border-l1) !important;
   color: var(--dsw-alias-label-primary) !important;
@@ -530,12 +511,11 @@ html[data-platform='darwin'] .dsh003-menu-surface-backing {
 }
 .dsh003-picker-search-icon {
   position: absolute !important;
-  /* left 10：图标墨迹在 14px 盒内自 ~1.5px 起，落在内容列上，与模型名左缘对齐。
-     与 padding-left 32 配对是为了让**看得见的**左右间距相等（不是盒子上的数字相等）：
-     左侧 = 10 + 1.5 = 11.5；右侧 = 32 + 文字自留白 1.5 − (10 + 图标墨迹右缘 12) = 11.5。
-     两个 1.5 都是应用内逐像素实测值（2026-10-07），换字体需重新量。
+  /* left 9.75：@kewen/dsh-ui SearchIcon（16 视框 1.5px 线宽缩至 14px 盒）墨迹自 1.75px 起、至 12.5px 止，
+     落在内容列上与模型名左缘对齐（9.75 + 1.75 = 11.5）。与 padding-left 32.25 配对使左右可视留白相等：
+     左侧 = 9.75 + 1.75 = 11.5；右侧 = 32.25 + 文字自留白 1.5 − (9.75 + 12.5) = 11.5。
      不变量见 tests/search-icon-spacing.test.mjs。 */
-  left: 10px !important;
+  left: 9.75px !important;
   display: inline-flex !important;
   color: var(--dsw-alias-label-secondary) !important;
   pointer-events: none !important;
@@ -545,11 +525,11 @@ html[data-platform='darwin'] .dsh003-menu-surface-backing {
   width: 100% !important;
   min-width: 0 !important;
   height: 36px !important;
-  /* 左内边距 32：为图标留位并让两侧"看得见的"间距相等——图标墨迹不占满 14px 盒，
-     文字本身也带留白，所以盒子上的数字并不对称（左 10 / 右 8）。换算见 icon 规则注释。 */
-  padding: 0 12px 0 32px !important;
+  /* 左内边距 32.25：为 @kewen/dsh-ui SearchIcon 留位并让两侧可视间距严格相等（11.5px）。 */
+  padding: 0 12px 0 32.25px !important;
   border: 1px solid transparent !important;
-  border-radius: var(--dshT3-radius-md, 8px) !important;
+  border-radius: var(--dsw-radius-sm, 8px) !important;
+  corner-shape: var(--dsh-corner-shape, var(--dsw-corner-shape, round)) !important;
   background: var(--dsw-alias-interactive-bg-hover) !important;
   color: var(--dsw-alias-label-primary) !important;
   font-size: 12px !important;
@@ -561,7 +541,7 @@ html[data-platform='darwin'] .dsh003-menu-surface-backing {
   color: var(--dsw-alias-label-secondary) !important;
 }
 .dsh003-picker-search:focus-visible {
-  border-color: var(--dshT3-ring, var(--dsw-alias-border-l3)) !important;
+  border-color: var(--dsh-focus-ring-color, var(--dsw-alias-border-l3)) !important;
 }
 .dsh003-picker-model-list {
   flex: 1 !important;
@@ -603,7 +583,8 @@ html[data-platform='darwin'] .dsh003-menu-surface-backing {
   padding: 0 6px !important;
   height: 20px !important;
   border: none !important;
-  border-radius: var(--dshT3-radius-sm, 6px) !important;
+  border-radius: var(--dsw-radius-sm, 8px) !important;
+  corner-shape: var(--dsh-corner-shape, var(--dsw-corner-shape, round)) !important;
   background: transparent !important;
   color: var(--dsw-alias-label-primary) !important;
   font-size: 11px !important;
@@ -612,29 +593,36 @@ html[data-platform='darwin'] .dsh003-menu-surface-backing {
   text-decoration: underline !important;
   text-underline-offset: 2px !important;
 }
-.dsh003-picker-retry:hover {
-  background: var(--dsw-alias-interactive-bg-hover) !important;
+@media (hover: hover) {
+  .dsh003-picker-retry:hover {
+    background: var(--dsw-alias-interactive-bg-hover) !important;
+  }
 }
 .dsh003-picker-retry:focus-visible {
   outline: none !important;
   box-shadow: 0 0 0 2px var(--dsw-alias-border-l3) !important;
 }
 
-/* ⑤ 模型行 */
+/* ⑤ 模型行（外层 16px - 8px padding = 8px 同心圆角） */
 .dsh003-picker-model-row {
   display: flex !important;
   align-items: center !important;
   width: 100% !important;
   padding: 6px 12px !important;
   border: none !important;
-  border-radius: var(--dshT3-radius-md, 8px) !important;
+  border-radius: var(--dsw-radius-sm, 8px) !important;
+  corner-shape: var(--dsh-corner-shape, var(--dsw-corner-shape, round)) !important;
   background: transparent !important;
   cursor: pointer !important;
   box-sizing: border-box !important;
   text-align: left !important;
   transition: background 120ms ease !important;
 }
-.dsh003-picker-model-row:hover,
+@media (hover: hover) {
+  .dsh003-picker-model-row:hover {
+    background: var(--dsw-alias-interactive-bg-hover) !important;
+  }
+}
 .dsh003-picker-model-row:focus-visible {
   background: var(--dsw-alias-interactive-bg-hover) !important;
 }
@@ -689,7 +677,8 @@ html[data-platform='darwin'] .dsh003-menu-surface-backing {
   flex: none !important;
   overflow: hidden !important;
   border: none !important;
-  border-radius: var(--dshT3-radius-sm, 6px) !important;
+  border-radius: var(--dsw-radius-sm, 8px) !important;
+  corner-shape: var(--dsh-corner-shape, var(--dsw-corner-shape, round)) !important;
   background: transparent !important;
   color: var(--dsw-alias-label-secondary) !important;
   cursor: pointer !important;
@@ -697,19 +686,25 @@ html[data-platform='darwin'] .dsh003-menu-surface-backing {
   opacity: 0 !important;
   transition: color 120ms ease, opacity 120ms ease !important;
 }
-.dsh003-picker-model-row:hover .dsh003-picker-row-star,
 .dsh003-picker-row-star:focus-visible,
 .dsh003-picker-row-star[data-fav="true"] {
   width: 24px !important;
   margin-left: 8px !important;
   opacity: 1 !important;
 }
-/* hover 预览色=点击结果色（M-053：星色语义统一黄系，收藏后同黄） */
-.dsh003-picker-row-star:hover {
-  color: var(--dshT3-warning, #f59e0b) !important;
+@media (hover: hover) {
+  .dsh003-picker-model-row:hover .dsh003-picker-row-star {
+    width: 24px !important;
+    margin-left: 8px !important;
+    opacity: 1 !important;
+  }
+  /* hover 预览色=点击结果色（M-053：星色语义统一宿主暖黄，收藏后同色） */
+  .dsh003-picker-row-star:hover {
+    color: var(--dsw-alias-state-warn-primary) !important;
+  }
 }
 .dsh003-picker-row-star[data-fav="true"] {
-  color: var(--dshT3-warning, #f59e0b) !important;
+  color: var(--dsw-alias-state-warn-primary) !important;
 }
 
 /* 选中态小勾：与星标/搜索同族几何单线（trailing check，居右常驻，24px 容器盒与星标按钮严格居中对齐） */
@@ -725,9 +720,13 @@ html[data-platform='darwin'] .dsh003-menu-surface-backing {
 }
 /* 当星标展开（收藏常驻或鼠标悬停）时，两盒紧挨（margin-left: 0），依靠两盒自带的各 5px 内留白形成天然通透的 10px 呼吸间隙 */
 .dsh003-picker-row-star[data-fav="true"] + .dsh003-picker-row-check,
-.dsh003-picker-model-row:hover .dsh003-picker-row-star + .dsh003-picker-row-check,
 .dsh003-picker-row-star:focus-visible + .dsh003-picker-row-check {
   margin-left: 0 !important;
+}
+@media (hover: hover) {
+  .dsh003-picker-model-row:hover .dsh003-picker-row-star + .dsh003-picker-row-check {
+    margin-left: 0 !important;
+  }
 }
 
 /* ⑥ 底部：思考强度单行集成条（左侧辅助标签+当前档名，右侧胶囊滑轨） */
@@ -791,12 +790,13 @@ html[data-platform='darwin'] .dsh003-menu-surface-backing {
   color: var(--dsw-alias-label-secondary) !important;
 }
 
-/* 右侧横向滑轨容器（槽：20px 高，6px 圆角，与把手完全对齐） */
+/* 右侧横向滑轨容器（槽：20px 高，8px 双轨圆角，与把手完全对齐） */
 .dsh003-picker-slider {
   position: relative !important;
   flex: 1 1 auto !important;
   height: 20px !important;
-  border-radius: var(--dshT3-radius-sm, 6px) !important;
+  border-radius: var(--dsw-radius-sm, 8px) !important;
+  corner-shape: var(--dsh-corner-shape, var(--dsw-corner-shape, round)) !important;
   background: var(--dsw-alias-interactive-bg-hover) !important;
 }
 
@@ -818,6 +818,7 @@ html[data-platform='darwin'] .dsh003-menu-surface-backing {
   width: 4px !important;
   height: 4px !important;
   border-radius: 999px !important;
+  corner-shape: round !important;
   background: var(--dsw-alias-label-tertiary) !important;
   transform: translate(-50%, -50%) !important;
   pointer-events: none !important;
@@ -825,7 +826,7 @@ html[data-platform='darwin'] .dsh003-menu-surface-backing {
 }
 /* 最高档主题色刻度点 */
 .dsh003-picker-tick[data-max="true"] {
-  background: color-mix(in oklch, var(--dshT3-primary, var(--dsw-alias-label-primary)) 65%, var(--dsw-alias-bg-layer-1)) !important;
+  background: color-mix(in oklch, var(--dsw-alias-state-business-primary) 65%, var(--dsw-alias-bg-layer-1)) !important;
 }
 
 /* 滑过深灰段：自槽左端向右长到珠心，width 由行内样式按 ratio 计算 */
@@ -834,13 +835,14 @@ html[data-platform='darwin'] .dsh003-menu-surface-backing {
   top: 0 !important;
   left: 0 !important;
   height: 100% !important;
-  border-radius: var(--dshT3-radius-sm, 6px) !important;
+  border-radius: var(--dsw-radius-sm, 8px) !important;
+  corner-shape: var(--dsh-corner-shape, var(--dsw-corner-shape, round)) !important;
   background: var(--dsw-alias-interactive-bg-active) !important;
   pointer-events: none !important;
   transition: width 120ms ease !important;
 }
 
-/* 竖向扁药丸把手：16px 宽 × 20px 高（贴满槽高，静止零空隙零漏影），6px 圆角；hover/active
+/* 竖向扁药丸把手：16px 宽 × 20px 高（贴满槽高，静止零空隙零漏影），8px 双轨圆角；hover/active
    触感 + focus ring 由命中层兄弟选择器驱动（命中层在 DOM 最前，~ 反选后面的视觉层） */
 .dsh003-picker-knob {
   position: absolute !important;
@@ -848,7 +850,8 @@ html[data-platform='darwin'] .dsh003-menu-surface-backing {
   width: 16px !important;
   height: 20px !important;
   border: 1px solid var(--dsw-alias-border-l1) !important;
-  border-radius: var(--dshT3-radius-sm, 6px) !important;
+  border-radius: var(--dsw-radius-sm, 8px) !important;
+  corner-shape: var(--dsh-corner-shape, var(--dsw-corner-shape, round)) !important;
   background: var(--dsw-alias-bg-layer-1) !important;
   box-shadow: var(--dsw-shadow-lv1) !important;
   box-sizing: border-box !important;
@@ -856,15 +859,17 @@ html[data-platform='darwin'] .dsh003-menu-surface-backing {
   pointer-events: none !important;
   transition: left 120ms ease, transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease !important;
 }
-.dsh003-picker-range:hover ~ .dsh003-picker-knob {
-  transform: translate(-50%, -50%) scale(1.08) !important;
-  box-shadow: var(--dsw-shadow-lv2) !important;
+@media (hover: hover) {
+  .dsh003-picker-range:hover ~ .dsh003-picker-knob {
+    transform: translate(-50%, -50%) scale(1.08) !important;
+    box-shadow: var(--dsw-shadow-lv2) !important;
+  }
 }
 .dsh003-picker-range:active ~ .dsh003-picker-knob {
   transform: translate(-50%, -50%) scale(1.15) !important;
 }
 .dsh003-picker-range:focus-visible ~ .dsh003-picker-knob {
-  border-color: var(--dshT3-ring, var(--dsw-alias-border-l3)) !important;
+  border-color: var(--dsh-focus-ring-color, var(--dsw-alias-border-l3)) !important;
 }
 
 /* 拖动中：位移过渡旁路——关掉后 1:1 直跟零迟滞；触感过渡保留。松手 data-dragging 归 false → 平滑吸附 */
@@ -875,10 +880,10 @@ html[data-platform='darwin'] .dsh003-menu-surface-backing {
   transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease !important;
 }
 
-/* 深色模式定值覆盖（继承 M-069 用户调优标准） */
+/* 深色模式同源色阶覆盖（基于 --dsw-alias-* 派生，零硬编码 #hex，继承 M-069 明度对比度） */
 body[data-ds-dark-theme] {
-  --dsh003-effort-track: #4D4D4E;
-  --dsh003-effort-fill: #7A7D82;
+  --dsh003-effort-track: color-mix(in oklab, var(--dsw-alias-bg-layer-3) 72%, var(--dsw-alias-label-caption));
+  --dsh003-effort-fill: color-mix(in oklab, var(--dsw-alias-label-secondary) 58%, var(--dsw-alias-bg-layer-3));
 }
 body[data-ds-dark-theme] .dsh003-picker-slider {
   background: var(--dsh003-effort-track, var(--dsw-alias-interactive-bg-hover)) !important;
@@ -891,5 +896,29 @@ body[data-ds-dark-theme] .dsh003-picker-tick[data-max='true'] {
 }
 body[data-ds-dark-theme] .dsh003-picker-knob {
   background: var(--dsw-alias-label-tertiary) !important;
+}
+
+/* ⑦ 官方扩展选项区（RC2 conversation.input.model.options，如 Agent 团队模式开关）：
+   置于思考强度条下方；无注册项或渲染为空时自动隐藏，不额外占高。 */
+.dsh003-picker-options {
+  flex: none !important;
+  padding: 4px !important;
+  border-top: 1px solid var(--dsw-alias-border-l1) !important;
+  box-sizing: border-box !important;
+}
+.dsh003-picker-options:empty,
+.dsh003-picker-options:has(> [data-slot]:empty) {
+  display: none !important;
+}
+
+/* ⑧ 设置页卡片：@kewen/dsh-ui Card + CardRow 承接宿主 SettingsValueField 与快捷开关 */
+.dsh003-settings-row {
+  align-items: flex-start !important;
+}
+.dsh003-settings-row .dsh-card-title:empty {
+  display: none !important;
+}
+.dsh003-settings-row > .dsh-card-action {
+  padding-top: 2px !important;
 }
 `

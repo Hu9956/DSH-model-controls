@@ -957,9 +957,9 @@ test('on a desktop the menu still hugs the trigger rather than centring', () => 
 
 test('menu placement preserves normal size, shrinks above, flips below and stays in bounds', () => {
   const cases = [
-    { width: 1000, height: 700, rect: { top: 500, bottom: 528, right: 900 }, expectedHeight: 360, above: true },
+    { width: 1000, height: 700, rect: { top: 500, bottom: 528, right: 900 }, expectedHeight: 392, above: true },
     { width: 700, height: 400, rect: { top: 340, bottom: 368, right: 690 }, expectedHeight: 328, above: true },
-    { width: 280, height: 600, rect: { top: 50, bottom: 78, right: 40 }, expectedHeight: 360, above: false },
+    { width: 280, height: 600, rect: { top: 50, bottom: 78, right: 40 }, expectedHeight: 392, above: false },
   ]
   for (const c of cases) {
     const p = pickerPosition(c.rect, c.width, c.height)

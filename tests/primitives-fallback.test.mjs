@@ -115,12 +115,12 @@ test('without the primitives package the plugin applies, renders its button and 
   await action(() => button.click())
   const panel = query('.dsh003-picker-panel')
   assert.ok(panel, 'the panel opens')
-  // 自带的 MenuSurface：官方同款标记（材质层 + body 下的 backing），类名为插件前缀。
+  // 内联的 @kewen/dsh-ui MenuSurface：柔焦微边共享毛玻璃材质层 + body 下的 backing。
   assert.equal(panel.dataset.menuMaterial, 'translucent')
-  assert.ok(panel.classList.contains('dsh003-menu-surface'))
-  assert.ok(panel.firstElementChild.classList.contains('dsh003-menu-surface-material'))
+  assert.ok(panel.classList.contains('hs-msurf'))
+  assert.ok(panel.firstElementChild.classList.contains('hs-msurf-material'))
   const backing = query('body > [data-menu-backing]')
-  assert.ok(backing?.classList.contains('dsh003-menu-surface-backing'))
+  assert.ok(backing?.classList.contains('hs-msurf-backing'))
   assert.equal(backing.style.getPropertyValue('--dsh-menu-anchor'), panel.style.getPropertyValue('--dsh-menu-anchor'))
   // Tooltip 退化为只渲染锚点。
   assert.ok(query('.dsh003-picker-model-name'))

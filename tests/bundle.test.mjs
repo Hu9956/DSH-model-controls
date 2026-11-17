@@ -51,3 +51,53 @@ test('inject declares remote and remote.session (read through our ctx by modelDi
     assert.ok(exports.inject.includes(name), `inject must include ${name}`)
   }
 })
+
+test('borrows RC2 conversation.input.model.options child slot non-enumerably and cleans up on dispose', () => {
+  let descriptor
+  runInNewContext(readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8'), {
+    window: { __ModuleLoader__: { load: value => { descriptor = value } } }, console,
+  })
+  const exports = descriptor.factory(name => name === '@deepseek-ai/dsh-client-ui-primitives' ? { Tooltip: () => null } : require(name))
+  const list = []
+  const listeners = new Set()
+  let cleanupSlot
+  const services = {
+    slots: {
+      inject: (key, register) => {
+        const off = register()
+        if (key === 'conversation.input.model') cleanupSlot = off
+      },
+      entries: key => key === 'conversation.input.model' ? list : [],
+      subscribe: (key, fn) => {
+        if (key === 'conversation.input.model') listeners.add(fn)
+        return () => listeners.delete(fn)
+      },
+      register: (value, component) => {
+        const record = { ...value, component }
+        if (value.name === 'conversation.input.model') list.push(record)
+        return () => {
+          const idx = list.indexOf(record)
+          if (idx >= 0) list.splice(idx, 1)
+        }
+      },
+    },
+    sessions: { subagentAddress: () => undefined },
+    modelDirectories: { directoryFor: () => ({}) },
+  }
+  exports.apply({ get: name => services[name] })
+  assert.equal(list.length, 1)
+  const mine = list[0]
+  assert.equal(mine.children, undefined)
+
+  // Official ModelSelect arrives later with RC2 conversation.input.model.options child slot
+  const optionsSpec = { kind: 'list', scope: 'session' }
+  list.push({ name: 'conversation.input.model', component: function OfficialModelSelect() {}, children: { 'conversation.input.model.options': optionsSpec } })
+  listeners.forEach(fn => fn())
+
+  assert.ok(mine.children, 'borrowed children map must be attached')
+  assert.equal(mine.children['conversation.input.model.options'], optionsSpec)
+  assert.deepEqual(Object.keys(mine.children), [], 'borrowed child slot keys must be non-enumerable')
+
+  cleanupSlot()
+  assert.equal(mine.children, undefined)
+})

@@ -1,6 +1,7 @@
 /** Session picker backed by the official shared directory; remembers accepted per-model efforts. */
 import * as React from 'react'
 import { createPortal } from 'react-dom'
+import { isImeComposing } from '@kewen/dsh-ui'
 
 import { IconChevronDownOutlineRegular } from './chevron-icon'
 
@@ -26,9 +27,11 @@ export interface ModelPickerButtonProps {
   locked?: boolean
   /** 选择器文案的语言读取器；缺省用中文兜底。 */
   t?: Translate<PickerKey>
+  /** 宿主子插槽渲染器（RC2 conversation.input.model.options 等）。 */
+  renderSlot?: (key: string, props: Record<string, unknown>) => React.ReactNode
 }
 
-export function ModelPickerButton({ locked = false, directory, t = fallbackTranslate }: ModelPickerButtonProps): React.ReactNode {
+export function ModelPickerButton({ locked = false, directory, t = fallbackTranslate, renderSlot }: ModelPickerButtonProps): React.ReactNode {
   const adapter = React.useMemo(() => createCatalogAdapter(directory), [directory])
   const catalog = React.useSyncExternalStore(adapter.subscribe, adapter.getSnapshot)
   const [selectionError, setSelectionError] = React.useState<string | null>(null)
@@ -92,6 +95,7 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
       closeMenu()
     }
     const onKeyDown = (e: KeyboardEvent): void => {
+      if (isImeComposing(e)) return
       if (e.key === 'Escape') {
         e.preventDefault()
         closeMenu(true)
@@ -332,6 +336,11 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
           onPick={pick}
           onSelectEffort={handleSelectEffort}
           onClose={() => closeMenu(true)}
+          optionsSlot={renderSlot?.('conversation.input.model.options', {
+            locked,
+            dismiss: () => closeMenu(true),
+            reportFailure: (message: string) => setSelectionError(message),
+          })}
         />,
         document.body,
       )}

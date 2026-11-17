@@ -229,6 +229,7 @@ export function useButtonCollapse(
   // 上一个模型的形态（长名字的竖条套在短名字上），约 30ms 后才换成文字，手机上看得出闪一下。
   React.useLayoutEffect(() => {
     let row: HTMLElement | null = null
+    let lastMax = ''
 
     const measure = (): void => {
       const button = buttonRef.current
@@ -249,7 +250,11 @@ export function useButtonCollapse(
       const cap = Math.min(ABSOLUTE_CAP, available, Math.max(MIN_CAP, available * AVAILABLE_SHARE))
 
       // 注意：CSS 拿到的仍然是「上限」，不是定宽。模型名短时按钮会自然更窄。
-      button.style.setProperty('--dsh003-max', `${cap}px`)
+      const nextMax = `${cap}px`
+      if (lastMax !== nextMax) {
+        lastMax = nextMax
+        button.style.setProperty('--dsh003-max', nextMax)
+      }
 
       const style = window.getComputedStyle(button)
       const padding = (Number.parseFloat(style.paddingLeft) || 0) + (Number.parseFloat(style.paddingRight) || 0)

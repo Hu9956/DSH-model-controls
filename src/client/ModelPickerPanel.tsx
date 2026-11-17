@@ -7,6 +7,14 @@
  * 收藏视图：右栏跨提供方汇总收藏的模型，行两行制（模型名 + 供应商名副行，M-054，行高 36px 不变）。搜索：模型 id/名称（收藏视图含提供方名）子串过滤。
  */
 import * as React from 'react'
+import {
+  CheckIcon,
+  ScrollArea,
+  SearchIcon,
+  StarIcon,
+  attachScrollArea,
+  isImeComposing,
+} from '@kewen/dsh-ui'
 import { MenuSurface } from './MenuSurface'
 import { Tooltip } from './host-primitives'
 
@@ -23,34 +31,6 @@ import { useProviderSort } from './use-provider-sort'
 
 /** 未注入语言服务时的兜底（测试或无 locale 的宿主）。 */
 const fallbackTranslate = pickerFallback
-
-function StarIcon(props: { filled: boolean }): React.ReactNode {
-  // lucide star（24 viewBox）：统一保留 2px 描边边界，避免实心填充消除描边外扩导致视觉缩小（10%跳变）
-  return (
-    <svg width={14} height={14} viewBox="0 0 24 24" fill={props.filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={2} strokeLinejoin="round" aria-hidden="true">
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-    </svg>
-  )
-}
-
-function SearchIcon(): React.ReactNode {
-  // lucide search（24 viewBox），与星标同族同笔画
-  return (
-    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true">
-      <circle cx={11} cy={11} r={7} />
-      <path d="M20 20l-3.5-3.5" />
-    </svg>
-  )
-}
-
-function CheckIcon(): React.ReactNode {
-  // lucide check（24 viewBox），与星标/搜索同族同笔画（2px 描边 + 圆角端点与拐角，几何平滑无形变）
-  return (
-    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  )
-}
 
 /** 把 v 夹在 [lo, hi]。 */
 const clamp = (v: number, lo: number, hi: number): number => Math.min(Math.max(v, lo), hi)
@@ -153,6 +133,8 @@ export function ModelPickerPanel(props: {
   selectionError?: string | null
   onSelectEffort?(effortId: string): void
   onClose(): void
+  /** 官方模型菜单附加选项插槽（RC2 conversation.input.model.options，如团队模式开关）。 */
+  optionsSlot?: React.ReactNode
 }): React.ReactNode {
   const { providers, current, catalogStatus } = props
   const providerSort = useProviderSort(providers)
@@ -170,8 +152,15 @@ export function ModelPickerPanel(props: {
     searchRef.current?.focus({ preventScroll: true })
   }, [])
 
+  React.useEffect(() => {
+    const el = providerSort.listRef.current
+    if (!el) return undefined
+    return attachScrollArea(el)
+  }, [providerSort.listRef])
+
   const t = props.t ?? fallbackTranslate
   const onPanelKeyDown = (event: React.KeyboardEvent): void => {
+    if (isImeComposing(event)) return
     if (event.key === 'Escape') {
       event.preventDefault()
       event.stopPropagation()
@@ -453,6 +442,7 @@ export function ModelPickerPanel(props: {
 
   return (
     <MenuSurface ref={panelRef} className="dsh003-picker-panel" role="dialog" aria-label={t('dialogLabel')} style={props.containerStyle} onKeyDown={onPanelKeyDown}>
+      <div className="dsh003-picker-inner">
       <div className="dsh003-picker-body">
         <div className="dsh003-picker-prov-col" role="tablist" aria-label={t('providerRailLabel')}>
           <div className="dsh003-picker-prov-head">
@@ -467,44 +457,47 @@ export function ModelPickerPanel(props: {
                 setFavView(!favView)
               }}
             >
-              <StarIcon filled={favView} />
+              <StarIcon size={14} inline={false} filled={favView} />
             </button>
           </div>
           <div className="dsh003-picker-prov-divider" />
-          <div ref={providerSort.listRef} className="dsh003-picker-prov-list" data-sorting={providerSort.drag ? 'true' : undefined}>
-            {providerSort.sorted.map(provider => (
-              <button
-                key={provider.id}
-                type="button"
-                className="dsh003-picker-prov"
-                data-provider-id={provider.id}
-                data-dragging={providerSort.drag?.id === provider.id ? 'true' : undefined}
-                data-insert={providerSort.drag?.before === provider.id ? 'before' : undefined}
-                style={providerSort.drag?.id === provider.id ? { transform: `translateY(${providerSort.drag.offset}px)` } : undefined}
-                data-active={!favView && provider.id === activeProvider?.id ? 'true' : 'false'}
-                aria-label={displayProviderName(provider)}
-                title={format(t('providerReorderHint'), { name: displayProviderName(provider) })}
-                onPointerDown={event => providerSort.begin(event, provider.id)}
-                onClickCapture={providerSort.suppressClick}
-                onKeyDown={event => providerSort.keyboardMove(event, provider.id)}
-                onContextMenu={event => event.preventDefault()}
-                onClick={() => {
-                  rememberedFavView = false
-                  rememberedProviderId = provider.id
-                  setFavView(false)
-                  setActiveProviderId(provider.id)
-                }}
-              >
-                <ProviderLogo {...displayProviderIcon(provider)} badge={badges.get(provider.id)} />
-              </button>
-            ))}
-            {providerSort.drag?.before === null && <span className="dsh003-picker-prov-insert-end" aria-hidden="true" />}
+          <div className="dsh-scroll-frame dsh003-picker-prov-scroll">
+            <div ref={providerSort.listRef} className="dsh-scroll-area dsh003-picker-prov-list" data-sorting={providerSort.drag ? 'true' : undefined}>
+              {providerSort.sorted.map(provider => (
+                <button
+                  key={provider.id}
+                  type="button"
+                  className="dsh003-picker-prov"
+                  data-provider-id={provider.id}
+                  data-dragging={providerSort.drag?.id === provider.id ? 'true' : undefined}
+                  data-insert={providerSort.drag?.before === provider.id ? 'before' : undefined}
+                  style={providerSort.drag?.id === provider.id ? { transform: `translateY(${providerSort.drag.offset}px)` } : undefined}
+                  data-active={!favView && provider.id === activeProvider?.id ? 'true' : 'false'}
+                  aria-label={displayProviderName(provider)}
+                  title={format(t('providerReorderHint'), { name: displayProviderName(provider) })}
+                  onPointerDown={event => providerSort.begin(event, provider.id)}
+                  onClickCapture={providerSort.suppressClick}
+                  onKeyDown={event => providerSort.keyboardMove(event, provider.id)}
+                  onContextMenu={event => event.preventDefault()}
+                  onClick={() => {
+                    rememberedFavView = false
+                    rememberedProviderId = provider.id
+                    setFavView(false)
+                    setActiveProviderId(provider.id)
+                  }}
+                >
+                  <ProviderLogo {...displayProviderIcon(provider)} badge={badges.get(provider.id)} />
+                </button>
+              ))}
+              {providerSort.drag?.before === null && <span className="dsh003-picker-prov-insert-end" aria-hidden="true" />}
+            </div>
+            <div className="dsh-scroll-thumb" aria-hidden="true" hidden />
           </div>
         </div>
         <div className="dsh003-picker-model-col">
           <div className="dsh003-picker-search-row">
             <div className="dsh003-picker-search-box">
-              <span className="dsh003-picker-search-icon"><SearchIcon /></span>
+              <span className="dsh003-picker-search-icon"><SearchIcon size={14} inline={false} /></span>
               <input
                 ref={searchRef}
                 type="text"
@@ -514,10 +507,13 @@ export function ModelPickerPanel(props: {
                 title={placeholder}
                 value={query}
                 onChange={e => setQuery(e.target.value)}
+                onKeyDown={e => {
+                  if (isImeComposing(e)) e.stopPropagation()
+                }}
               />
             </div>
           </div>
-          <div className="dsh003-picker-model-list">
+          <ScrollArea className="dsh003-picker-model-scroll" viewportClassName="dsh003-picker-model-list">
             {visibleRows.length === 0 && <p className="dsh003-picker-empty">{emptyText}</p>}
             {visibleRows.map(row => {
               const key = favoriteKeyOf(row.providerId, row.modelId)
@@ -554,17 +550,17 @@ export function ModelPickerPanel(props: {
                       }
                     }}
                   >
-                    <StarIcon filled={favorites.has(key)} />
+                    <StarIcon size={14} inline={false} filled={favorites.has(key)} />
                   </span>
                   {active && (
                     <span className="dsh003-picker-row-check" aria-hidden="true">
-                      <CheckIcon />
+                      <CheckIcon size={14} inline={false} />
                     </span>
                   )}
                 </button>
               )
             })}
-          </div>
+          </ScrollArea>
         </div>
       </div>
       {/* 逐个提供方给出失败原因 + 重试。只显示一句「部分提供方加载失败」会让用户
@@ -672,6 +668,12 @@ export function ModelPickerPanel(props: {
             <span className="dsh003-picker-effort-none">{t('effortUnsupported')}</span>
           </div>
         )}
+      </div>
+      {props.optionsSlot != null && (
+        <div className="dsh003-picker-options">
+          {props.optionsSlot}
+        </div>
+      )}
       </div>
     </MenuSurface>
   )

@@ -107,8 +107,8 @@ try {
   }
   const after = await installAndCheck(profile, resolve(next), versionOf(next),
     previous === undefined ? 'install' : 'upgrade',
-    // 当前版本的文案标记：中英字典 + 搜索框间距修复
-    ['Search models…', '搜索模型…', '0 12px 0 32px'])
+    // 当前版本的文案标记：中英字典 + 搜索框间距修复 + 面板高度 392px
+    ['Search models…', '搜索模型…', '0 12px 0 32.25px', 'height: 392px'])
   console.log(`${previous === undefined ? 'install' : 'upgrade'} ok: ${after}`)
   console.log('install check: PASS')
 } finally {

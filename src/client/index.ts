@@ -2,8 +2,15 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 type SessionId = Parameters<Pick<ISessions, 'subagentAddress'>['subagentAddress']>[0]
 
+type SlotEntry = {
+  component: unknown
+  children?: Record<string, unknown>
+}
+
 type SlotsApi = {
   inject(key: string, callback: () => () => void): void
+  entries?(key: string): readonly SlotEntry[]
+  subscribe?(key: string, listener: () => void): () => void
   register(
     entry: {
       name: string
@@ -26,6 +33,7 @@ type LocaleApi = {
   subscribe(listener: () => void): () => void
 }
 
+import { injectPluginStyles, mountDshUiStyles } from '@kewen/dsh-ui'
 import { ModelControlsEntry } from './ModelControlsEntry'
 import type { ModelDirectoryFace } from './model-catalog'
 import { pickerCss } from './picker.css'
@@ -37,27 +45,30 @@ import {
   PICKER_NS, SETTINGS_NS, format,
   pickerEn, pickerZh, settingsEn, settingsZh, type PickerKey, type SettingsKey, type Translate,
 } from './locales'
+import { ModelPickerPanel } from './ModelPickerPanel'
 export { ModelControlsSettings } from './ModelControlsSettings'
 
 export { ModelControlsEntry } from './ModelControlsEntry'
 export { ModelPickerButton } from './ModelPickerButton'
-export { ModelPickerPanel } from './ModelPickerPanel'
+export { ModelPickerPanel }
 
 /** Dictionary namespaces owned by this plugin. */
 export const LOCALE_NS = SETTINGS_NS
 export const PICKER_LOCALE_NS = PICKER_NS
 
-function injectStylesOnce(): void {
-  if (typeof document === 'undefined') return
-  const existing = document.querySelector('style[data-plugin="dsh-std-model-picker"]')
-  if (existing) {
-    existing.textContent = pickerCss
-    return
+/**
+ * 挂载 @kewen/dsh-ui 共享样式块（引用计数版本仲裁）与本插件私有样式表，返回幂等组合清理函数。
+ */
+export function mountStyles(): () => void {
+  const disposeUi = mountDshUiStyles()
+  const disposePlugin = injectPluginStyles('@kewen/dsh-model-controls', pickerCss)
+  let disposed = false
+  return () => {
+    if (disposed) return
+    disposed = true
+    disposePlugin()
+    disposeUi()
   }
-  const style = document.createElement('style')
-  style.dataset.plugin = 'dsh-std-model-picker'
-  style.textContent = pickerCss
-  document.head.appendChild(style)
 }
 
 // 数组形式的 inject 全是必需服务：任一缺失插件停在 PENDING，apply 不会运行。
@@ -67,7 +78,19 @@ function injectStylesOnce(): void {
 export const inject = ['slots', 'sessions', 'remote', 'remote.session', 'modelDirectories', 'configForms', 'locale']
 
 export function apply(ctx: ClientContext): void {
-  injectStylesOnce()
+  if (typeof window !== 'undefined' && window !== null) {
+    const w = window as unknown as Record<string, unknown>
+    w.__DSH_MODEL_PICKER_SHARED__ = { ModelPickerPanel }
+    if (typeof ctx.effect === 'function') {
+      ctx.effect(() => () => {
+        if (w.__DSH_MODEL_PICKER_SHARED__ !== undefined) delete w.__DSH_MODEL_PICKER_SHARED__
+      }, 'model-controls: shared panel')
+    }
+  }
+  const disposeStyles = mountStyles()
+  if (typeof ctx.effect === 'function') {
+    ctx.effect(() => disposeStyles, 'model-controls: styles')
+  }
   // 收藏 / 思考强度记忆 / 供应商顺序与 DSH 宿主同步，电脑和手机共用一份。
   // 测试里的假 ctx 没有 effect；真实 cordis 总有。
   if (typeof ctx.effect === 'function') ctx.effect(() => startPrefsSync({
@@ -117,8 +140,8 @@ export function apply(ctx: ClientContext): void {
     // 测试的假 ctx 或非 cordis 调用方（bundle.test 故意不给 locale）。
     // inject 回调是延迟执行的，外层 try 兜不住，这里仍显式跳过注册。
     if (slots && directories !== undefined && typeof directories.directoryFor === 'function') {
-      slots.inject('conversation.input.model', () =>
-        slots.register(
+      slots.inject('conversation.input.model', () => {
+        const dispose = slots.register(
           {
             name: 'conversation.input.model',
             priority: -1,
@@ -131,8 +154,37 @@ export function apply(ctx: ClientContext): void {
             }),
           },
           ModelControlsEntry,
-        ),
-      )
+        )
+        if (typeof slots.entries !== 'function' || typeof slots.subscribe !== 'function') {
+          return dispose
+        }
+        // RC2 起官方 ModelSelect 在 conversation.input.model 上声明了子插槽（如 conversation.input.model.options，
+        // 承载 Agent 团队模式开关）。不可枚举地借到本注册上：renderSlot 可按名查找，卸载时宿主不会误撤官方声明。
+        const entriesOf = slots.entries.bind(slots)
+        const own = () => entriesOf('conversation.input.model').find(e => e.component === ModelControlsEntry)
+        let borrowed: Record<string, unknown> | undefined
+        const borrow = () => {
+          const mine = own()
+          const official = entriesOf('conversation.input.model').find(
+            e => e.component !== ModelControlsEntry && e.children !== undefined,
+          )
+          if (mine === undefined || official?.children === undefined || borrowed === official.children) return
+          const view: Record<string, unknown> = {}
+          for (const [key, spec] of Object.entries(official.children)) {
+            Object.defineProperty(view, key, { value: spec, enumerable: false })
+          }
+          mine.children = view
+          borrowed = official.children
+        }
+        borrow()
+        const unsubscribe = slots.subscribe('conversation.input.model', borrow)
+        return () => {
+          unsubscribe()
+          const mine = own()
+          if (mine !== undefined) delete mine.children
+          dispose()
+        }
+      })
     }
   } catch (e) {
     console.warn('[model-picker] slot registration failed', e)

@@ -1,5 +1,6 @@
 import * as React from 'react'
 import type { SettingsFormModel, SettingsFormScope } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Card, CardRow, StandaloneSwitch } from '@kewen/dsh-ui'
 import { settingsKit, warnPrimitivesOnce, type SettingsKit } from './host-primitives'
 import { settingsFormLabels, type SettingsKey, type Translate } from './locales'
 
@@ -54,9 +55,13 @@ export function ModelControlsSettings(props: ModelControlsSettingsProps) {
   return <SettingsCard {...props} kit={settingsKit} />
 }
 
-/** 官方表单不可用时的占位：一句说明，用宿主的说明文字色。 */
+/** 官方表单不可用时的占位：用 @kewen/dsh-ui 卡片承接一句宿主同源说明。 */
 function FormUnavailable({ t }: { t: ControlsTranslate }) {
-  return <p style={{ margin: 0, color: 'var(--dsw-alias-label-secondary)' }}>{t('formUnavailable')}</p>
+  return (
+    <Card className="dsh003-settings-card">
+      <CardRow title={t('formUnavailable')} />
+    </Card>
+  )
 }
 
 /** SettingsFormModel 实例要用到的方法；构造出的对象缺任何一个都按不可用处理。 */
@@ -102,28 +107,47 @@ function SettingsFields({ model, t, kit }: { model: SettingsFormModel<unknown>; 
   const state = React.useSyncExternalStore(listener => store.subscribe(listener), () => store.getSnapshot())
   React.useEffect(() => () => model.dispose(), [model])
   const actions = model.actions()
+  const disabled = !state.writable || state.saving
+  const compactChecked = state.compact.text.trim().toLowerCase() !== 'off'
   return <SettingsForm state={state} onSave={actions.save} onDiscard={actions.discard} labels={settingsFormLabels(t)}>
-    <SettingsValueField id="dsh-model-controls-compact" label={t('compactNamesLabel')}
-      hint={t('compactNamesHint')}
-      placeholder={t('compactNamesPlaceholder')}
-      help={{ label: t('compactNamesHelpLabel'), content: <>
-        <p>{t('compactNamesHelpOn')}</p>
-        <p>{t('compactNamesHelpOff')}</p>
-      </> }}
-      overriddenLabel={t('overridden')} resetLabel={t('reset')}
-      invalidLabel={t('compactNamesInvalid')}
-      disabled={!state.writable || state.saving} {...state.compact}
-      onEdit={text => actions.edit('compactModelNames', text)} onReset={() => actions.resetField('compactModelNames')} />
-    <SettingsValueField id="dsh-model-controls-magpie" label={t('addressLabel')}
-      hint={t('addressHint')}
-      placeholder={t('addressPlaceholder')}
-      help={{ label: t('addressHelpLabel'), content: <>
-        <p>{t('addressHelpAutomatic')}</p>
-        <p>{t('addressHelpWhenToFill')}</p>
-      </> }}
-      overriddenLabel={t('overridden')} resetLabel={t('reset')}
-      invalidLabel={t('invalid')}
-      disabled={!state.writable || state.saving} {...state.address}
-      onEdit={text => actions.edit('magpieBaseURL', text)} onReset={() => actions.resetField('magpieBaseURL')} />
+    <Card className="dsh003-settings-card">
+      <CardRow
+        className="dsh003-settings-row"
+        title={null}
+        action={
+          <StandaloneSwitch
+            checked={compactChecked}
+            disabled={disabled}
+            label={t('compactNamesLabel')}
+            onChange={next => actions.edit('compactModelNames', next ? 'on' : 'off')}
+          />
+        }
+      >
+        <SettingsValueField id="dsh-model-controls-compact" label={t('compactNamesLabel')}
+          hint={t('compactNamesHint')}
+          placeholder={t('compactNamesPlaceholder')}
+          help={{ label: t('compactNamesHelpLabel'), content: <>
+            <p>{t('compactNamesHelpOn')}</p>
+            <p>{t('compactNamesHelpOff')}</p>
+          </> }}
+          overriddenLabel={t('overridden')} resetLabel={t('reset')}
+          invalidLabel={t('compactNamesInvalid')}
+          disabled={disabled} {...state.compact}
+          onEdit={text => actions.edit('compactModelNames', text)} onReset={() => actions.resetField('compactModelNames')} />
+      </CardRow>
+      <CardRow className="dsh003-settings-row" title={null}>
+        <SettingsValueField id="dsh-model-controls-magpie" label={t('addressLabel')}
+          hint={t('addressHint')}
+          placeholder={t('addressPlaceholder')}
+          help={{ label: t('addressHelpLabel'), content: <>
+            <p>{t('addressHelpAutomatic')}</p>
+            <p>{t('addressHelpWhenToFill')}</p>
+          </> }}
+          overriddenLabel={t('overridden')} resetLabel={t('reset')}
+          invalidLabel={t('invalid')}
+          disabled={disabled} {...state.address}
+          onEdit={text => actions.edit('magpieBaseURL', text)} onReset={() => actions.resetField('magpieBaseURL')} />
+      </CardRow>
+    </Card>
   </SettingsForm>
 }

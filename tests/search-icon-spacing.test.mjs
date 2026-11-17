@@ -9,8 +9,8 @@ import { readFileSync } from 'node:fs'
  * 也自带左侧留白。下面三个常量是 2026-10-07 在应用里逐像素量出来的（原图 2x，
  * 已换算为逻辑像素）；换字体、换图标或换主题后必须重量，届时这条会失败并提醒。
  */
-const ICON_INK_LEFT = 1.5      // 图标盒左缘 → 图标墨迹左缘
-const ICON_INK_RIGHT = 12.0    // 图标盒左缘 → 图标墨迹右缘
+const ICON_INK_LEFT = 1.75     // @kewen/dsh-ui SearchIcon（16 视框缩至 14px 盒）：盒左缘 → 圆弧外墨迹左缘
+const ICON_INK_RIGHT = 12.5    // @kewen/dsh-ui SearchIcon（16 视框缩至 14px 盒）：盒左缘 → 手柄圆帽外墨迹右缘（2x 半像素对齐）
 const TEXT_INK_BEARING = 1.5   // 文字原点 → 占位文字墨迹左缘
 
 /** 从源码读出图标偏移、图标宽度与输入框左内边距。 */
@@ -23,7 +23,7 @@ function geometry() {
   return {
     inset: Number(/left: ([\d.]+)px/.exec(iconBlock)?.[1]),
     paddingLeft: Number(/padding: 0 [\d.]+px 0 ([\d.]+)px/.exec(searchBlock)?.[1]),
-    iconWidth: Number(/function SearchIcon[\s\S]*?width=\{([\d.]+)\}/.exec(panel)?.[1]),
+    iconWidth: Number(/<SearchIcon\s+size=\{([\d.]+)\}/.exec(panel)?.[1]),
   }
 }
 

@@ -15,6 +15,8 @@ export interface ModelControlsEntryProps {
   available: boolean
   /** 选择器文案的语言读取器，由本插件的注册注入；缺省时组件内中文兜底。 */
   t?: Translate<PickerKey>
+  /** 宿主注入的子插槽渲染器（用于渲染 conversation.input.model.options 等官方扩展项）。 */
+  renderSlot?: (key: string, props: Record<string, unknown>) => React.ReactNode
 }
 
 /**
@@ -22,11 +24,11 @@ export interface ModelControlsEntryProps {
  * @param props - locked/available，见 ModelControlsEntryProps。
  * @returns 容器（含统一模型+思考强度触发按钮）；available=false 时不渲染。
  */
-export function ModelControlsEntry({ locked, available, directory, t }: ModelControlsEntryProps): React.ReactNode {
+export function ModelControlsEntry({ locked, available, directory, t, renderSlot }: ModelControlsEntryProps): React.ReactNode {
   if (!available) return null
   return (
     <div className="dsh003-model-controls">
-      <ModelPickerButton locked={locked} directory={directory} t={t} />
+      <ModelPickerButton locked={locked} directory={directory} t={t} renderSlot={renderSlot} />
     </div>
   )
 }
