@@ -17,6 +17,8 @@ export interface ModelControlsEntryProps {
   t?: Translate<PickerKey>
   /** 宿主注入的子插槽渲染器（用于渲染 conversation.input.model.options 等官方扩展项）。 */
   renderSlot?: (key: string, props: Record<string, unknown>) => React.ReactNode
+  /** 点击顶栏「+」时打开宿主「设置 → 模型 / 供应商」页面。 */
+  onOpenSettings?(): void
 }
 
 /**
@@ -24,11 +26,11 @@ export interface ModelControlsEntryProps {
  * @param props - locked/available，见 ModelControlsEntryProps。
  * @returns 容器（含统一模型+思考强度触发按钮）；available=false 时不渲染。
  */
-export function ModelControlsEntry({ locked, available, directory, t, renderSlot }: ModelControlsEntryProps): React.ReactNode {
+export function ModelControlsEntry({ locked, available, directory, t, renderSlot, onOpenSettings }: ModelControlsEntryProps): React.ReactNode {
   if (!available) return null
   return (
     <div className="dsh003-model-controls">
-      <ModelPickerButton locked={locked} directory={directory} t={t} renderSlot={renderSlot} />
+      <ModelPickerButton locked={locked} directory={directory} t={t} renderSlot={renderSlot} onOpenSettings={onOpenSettings} />
     </div>
   )
 }

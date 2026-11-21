@@ -124,7 +124,14 @@ test('bundled client inlines @kewen/dsh-ui with zero external require or import'
 })
 
 test('apply mounts ref-counted @kewen/dsh-ui styles + plugin styles and disposes cleanly', () => {
+  // 模拟从 <=0.2.45 不重启热升级时遗留在 head 的旧版样式表，mountStyles 必须自动清理
+  const legacyStyle = win.document.createElement('style')
+  legacyStyle.dataset.plugin = 'dsh-std-model-picker'
+  legacyStyle.textContent = '.dsh003-picker-prov[data-active="true"]{background:red !important;}'
+  win.document.head.appendChild(legacyStyle)
+
   const peerDispose = plugin.mountStyles()
+  assert.equal(query('style[data-plugin="dsh-std-model-picker"]'), null, 'legacy <=0.2.45 style tag is purged on mount')
   const effects = []
   plugin.apply({
     get: () => undefined,
@@ -154,6 +161,7 @@ const dshUiPkg = JSON.parse(readFileSync(new URL('../../packages/dsh-ui/package.
 test('CJK IME composition events in search input never dismiss panel or steal focus', async () => {
   await action(() => root.render(React.createElement(plugin.ModelPickerButton, { directory: fixture() })))
   await action(() => query('.dsh003-picker-btn').click())
+  await action(() => query('.dsh003-picker-search-toggle').click())
   const search = query('.dsh003-picker-search')
   assert.ok(search)
   assert.equal(win.document.activeElement, search)
@@ -166,11 +174,12 @@ test('CJK IME composition events in search input never dismiss panel or steal fo
   assert.equal(query('.dsh003-picker-row-check svg.dsh-icon')?.getAttribute('viewBox'), '0 0 16 16')
   assert.equal(query('.dsh003-picker-row-star svg.dsh-icon')?.getAttribute('viewBox'), '0 0 16 16')
 
-  // Escape & ArrowDown while isComposing=true must NOT close panel or move focus to model rows
+  // Escape & ArrowDown while isComposing=true must NOT collapse search, close panel or move focus to model rows
   await action(() => {
     search.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', isComposing: true, bubbles: true, cancelable: true }))
     search.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'ArrowDown', isComposing: true, bubbles: true, cancelable: true }))
   })
+  assert.ok(query('.dsh003-picker-search'), 'search stays open during isComposing Escape')
   assert.ok(query('.dsh003-picker-panel'), 'panel stays open during isComposing Escape')
   assert.equal(win.document.activeElement, search, 'focus stays in search during isComposing ArrowDown')
 
@@ -180,11 +189,19 @@ test('CJK IME composition events in search input never dismiss panel or steal fo
     Object.defineProperty(ime229, 'keyCode', { value: 229 })
     search.dispatchEvent(ime229)
   })
+  assert.ok(query('.dsh003-picker-search'), 'search stays open during keyCode 229 Escape')
   assert.ok(query('.dsh003-picker-panel'), 'panel stays open during keyCode 229 Escape')
 
-  // Non-composing Escape closes panel normally
+  // First non-composing Escape collapses search back to tabs, keeping panel open
   await action(() => {
     search.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+  })
+  assert.equal(query('.dsh003-picker-search'), null)
+  assert.ok(query('.dsh003-picker-panel'), 'panel stays open after collapsing search')
+
+  // Second Escape closes the panel
+  await action(() => {
+    query('.dsh003-picker-panel').dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
   })
   assert.equal(query('.dsh003-picker-panel'), null)
 })
@@ -238,4 +255,68 @@ test('compositor invariants: MenuSurface glass host keeps overflow:visible with 
   const body = query('.dsh003-picker-panel > .dsh003-picker-inner > .dsh003-picker-body')
   assert.ok(panel && material && inner && body, 'hs-msurf-material must sit outside .dsh003-picker-inner clip container')
   assert.equal(inner.contains(material), false)
+})
+
+test('row hover rule never overrides starred or directly-hovered star color', () => {
+  assert.match(pickerCss, /\.dsh003-picker-model-row:hover\s+\.dsh003-picker-row-star:not\(\[data-fav="true"\]\):not\(:hover\)/)
+  assert.doesNotMatch(pickerCss, /\.dsh003-picker-model-row:hover\s+\.dsh003-picker-row-star\s*\{/)
+})
+
+test('top bar icon boxes, end-insert margin and focus pseudo-element invariants hold', () => {
+  assert.match(pickerCss, /\.dsh003-picker-search-icon\s+\.dsh-icon\s*\{[^}]*width:\s*14px\s*!important;[^}]*height:\s*14px\s*!important;/)
+  assert.match(pickerCss, /\.dsh003-picker-search-close\s+\.dsh-icon\s*\{[^}]*width:\s*14px\s*!important;[^}]*height:\s*14px\s*!important;/)
+  assert.match(pickerCss, /\.dsh003-picker-prov-insert-end\s*\{[^}]*margin:\s*0\s+-2px\s*!important;/)
+  assert.match(pickerCss, /\.dsh003-picker-prov:not\(\[data-insert="before"\]\):focus-visible::before/)
+})
+
+test('active row check sits inline after model name and all four bands align on the 16px grid', async () => {
+  assert.match(pickerCss, /\.dsh003-picker-topbar\s*\{[^}]*padding:\s*0\s+8px\s+0\s+6px\s*!important;/)
+  assert.match(pickerCss, /\.dsh003-picker-model-row\s*\{[^}]*padding:\s*6px\s+2px\s+6px\s+8px\s*!important;/)
+  assert.match(pickerCss, /\.dsh003-picker-model-row\[data-sub="true"\]\s*\{[^}]*padding:\s*3px\s+2px\s+3px\s+8px\s*!important;/)
+  assert.match(pickerCss, /\.dsh003-picker-foot\s*\{[^}]*padding:\s*6px\s+16px\s*!important;/)
+  assert.match(pickerCss, /\.dsh003-picker-options\s*\{[^}]*padding:\s*4px\s+8px\s*!important;/)
+  assert.match(pickerCss, /\.dsh003-picker-model-name\s*\{[^}]*flex:\s*0\s+1\s+auto\s*!important;/)
+  assert.match(pickerCss, /\.dsh003-picker-row-star\s+\.dsh-icon\s*\{[^}]*width:\s*14px\s*!important;[^}]*height:\s*14px\s*!important;/)
+  assert.match(pickerCss, /\.dsh003-picker-row-check\s+\.dsh-icon\s*\{[^}]*width:\s*13px\s*!important;[^}]*height:\s*13px\s*!important;/)
+
+  await action(() => root.render(React.createElement(plugin.ModelPickerButton, { directory: fixture() })))
+  await action(() => query('.dsh003-picker-btn').click())
+  const activeRow = query('.dsh003-picker-model-row[data-active="true"]')
+  assert.ok(activeRow)
+  const title = activeRow.querySelector('.dsh003-picker-model-title')
+  const name = title?.querySelector('.dsh003-picker-model-name')
+  const check = title?.querySelector('.dsh003-picker-row-check')
+  const star = activeRow.querySelector('.dsh003-picker-row-star')
+  assert.ok(title && name && check && star, 'check renders inside .dsh003-picker-model-title alongside model name')
+  assert.equal(title.contains(star), false, 'star stays outside title block at row trailing edge')
+})
+
+test('effort slider uses seamless capsule fill enclosing circular knob with distinct dark-mode contrast', async () => {
+  assert.match(pickerCss, /\.dsh003-picker-slider\s*\{[^}]*border-radius:\s*999px\s*!important;[^}]*corner-shape:\s*round\s*!important;/)
+  assert.match(pickerCss, /\.dsh003-picker-fill\s*\{[^}]*border-radius:\s*999px\s*!important;[^}]*corner-shape:\s*round\s*!important;/)
+  assert.match(pickerCss, /\.dsh003-picker-knob\s*\{[^}]*width:\s*18px\s*!important;[^}]*height:\s*18px\s*!important;[^}]*border-radius:\s*999px\s*!important;/)
+  assert.match(pickerCss, /body\[data-ds-dark-theme\]\s+\.dsh003-picker-knob\s*\{[^}]*var\(--dsh-brand-fill/)
+
+  await action(() => root.render(React.createElement(plugin.ModelPickerButton, { directory: fixture() })))
+  await action(() => query('.dsh003-picker-btn').click())
+  const fill = query('.dsh003-picker-fill')
+  const knob = query('.dsh003-picker-knob')
+  const ticks = win.document.querySelectorAll('.dsh003-picker-tick')
+  assert.match(fill?.style.width ?? '', /^calc\(20px \+ (?:0 \* \(100% - 20px\)|\(100% - 20px\) \* 0)\)$/)
+  assert.match(knob?.style.left ?? '', /^calc\(10px \+ (?:0 \* \(100% - 20px\)|\(100% - 20px\) \* 0)\)$/)
+  assert.match(ticks[0]?.style.left ?? '', /^calc\(10px \+ (?:0 \* \(100% - 20px\)|\(100% - 20px\) \* 0)\)$/)
+  assert.match(ticks[1]?.style.left ?? '', /^calc\(10px \+ (?:1 \* \(100% - 20px\)|\(100% - 20px\) \* 1)\)$/)
+})
+
+test('provider topbar mounts @kewen/dsh-ui sliding rounded underline indicator', async () => {
+  assert.match(pickerCss, /\.dsh003-picker-prov-list\s*\{[^}]*position:\s*relative\s*!important;/)
+  assert.match(pickerCss, /\.dsh003-picker-prov-ind::after\s*\{[^}]*border-radius:\s*999px\s*!important;[^}]*corner-shape:\s*round\s*!important;/)
+  assert.match(pickerCss, /\.dsh003-picker-prov-list\[data-ind\]\s+\.dsh003-picker-prov\[data-active="true"\]::after\s*\{\s*display:\s*none\s*!important;\s*\}/)
+
+  await action(() => root.render(React.createElement(plugin.ModelPickerButton, { directory: fixture() })))
+  await action(() => query('.dsh003-picker-btn').click())
+  const list = query('.dsh003-picker-prov-list')
+  assert.ok(list?.hasAttribute('data-ind'), 'provider rail mounts useSlidingIndicator data-ind attribute')
+  const ind = list?.querySelector('.dsh003-picker-prov-ind')
+  assert.ok(ind, 'provider rail renders sliding indicator node')
 })

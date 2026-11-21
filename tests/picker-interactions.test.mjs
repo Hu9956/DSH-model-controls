@@ -772,9 +772,9 @@ test('closing during dragging removes listeners and sends no selection', async (
   assert.equal(f.calls.length, 0)
   assert.equal(query('[role="dialog"]'), null)
 })
-test('focus enters search, arrows traverse rows, selection retains focus, Escape returns it', async () => {
+test('focus enters panel, arrows traverse rows, selection retains focus, Escape returns it', async () => {
   const f = fixture(); await render(f.directory); await open()
-  assert.equal(win.document.activeElement, query('.dsh003-picker-search'))
+  assert.equal(win.document.activeElement, query('[role="dialog"]'))
   await key(win.document.activeElement, 'ArrowDown')
   assert.equal(win.document.activeElement, rows()[0])
   await key(win.document.activeElement, 'ArrowDown')
@@ -787,7 +787,7 @@ test('focus enters search, arrows traverse rows, selection retains focus, Escape
   assert.equal(query('[role="dialog"]'), null)
   assert.equal(win.document.activeElement, query('.dsh003-picker-btn'))
 })
-test('viewport resize (phone keyboard) keeps the panel open; touch devices do not autofocus search', async () => {
+test('viewport resize (phone keyboard) keeps the panel open; touch devices do not autofocus panel', async () => {
   const f = fixture(); await render(f.directory); await open()
   await action(() => win.dispatchEvent(new win.Event('resize')))
   assert.notEqual(query('[role="dialog"]'), null)
@@ -795,11 +795,10 @@ test('viewport resize (phone keyboard) keeps the panel open; touch devices do no
   const original = win.matchMedia
   win.matchMedia = q => ({ matches: q === '(pointer: coarse)', media: q, addEventListener() {}, removeEventListener() {} })
   try {
-    await action(() => query('.dsh003-picker-search')?.blur?.())
     await action(() => win.document.body.focus())
     await open()
     assert.notEqual(query('[role="dialog"]'), null)
-    assert.notEqual(win.document.activeElement, query('.dsh003-picker-search'))
+    assert.notEqual(win.document.activeElement, query('[role="dialog"]'))
   } finally {
     win.matchMedia = original
   }
@@ -810,7 +809,7 @@ test('keyboard preview commits when focus leaves before keyup', async () => {
   await action(() => slider.focus())
   await key(slider, 'ArrowRight')
   assert.equal(f.calls.length, 0)
-  await action(() => query('.dsh003-picker-search').focus())
+  await action(() => query('.dsh003-picker-search-toggle').focus())
   assert.equal(f.calls.length, 1)
   assert.equal(f.calls[0].reasoningEffort, 'high')
 })
@@ -978,7 +977,7 @@ test('blur cancels an active pointer drag rather than committing a keyboard prev
   const f = fixture(); await render(f.directory); await open()
   const slider = query('[role="slider"]')
   await action(() => slider.focus()); await pointer(slider, 'pointerdown')
-  await action(() => query('.dsh003-picker-search').focus()); await pointer(win, 'pointerup')
+  await action(() => query('.dsh003-picker-search-toggle').focus()); await pointer(win, 'pointerup')
   assert.equal(f.calls.length, 0)
   assert.equal(slider.getAttribute('aria-valuetext'), '低')
 })
@@ -1083,10 +1082,10 @@ test('an asynchronously loaded catalog initially opens the current provider', as
   assert.equal(query('[data-provider-id="q"]').dataset.active, 'true')
 })
 
-test('window blur cancels an effort drag even when focus stays in search; a new gesture still works', async () => {
+test('window blur cancels an effort drag even when focus stays in panel; a new gesture still works', async () => {
   const f = fixture(); await render(f.directory); await open()
   const slider = query('[role="slider"]')
-  assert.equal(win.document.activeElement, query('.dsh003-picker-search'))
+  assert.equal(win.document.activeElement, query('[role="dialog"]'))
   await pointer(slider, 'pointerdown'); await pointer(win, 'pointermove', 1, 285)
   await action(() => win.dispatchEvent(new win.Event('blur')))
   assert.equal(slider.getAttribute('aria-valuetext'), '低')
@@ -1119,6 +1118,7 @@ test('empty supplier, catalog, favorites, loading and failure each show one matc
 
 test('a search with no results shows only the search empty message', async () => {
   const f = fixture(); await render(f.directory); await open()
+  await action(() => query('.dsh003-picker-search-toggle').click())
   const search = query('.dsh003-picker-search')
   await action(() => {
     Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set.call(search, 'does-not-exist')
@@ -1286,6 +1286,7 @@ test('a Magpie model splits into two lines in the supplier view, other suppliers
   assert.equal(rows()[0].querySelector('.dsh003-picker-model-name').textContent, 'Plain Model')
   // 搜索仍按上游原名匹配（拆分只影响显示，不影响检索）：路由来源也能搜到。
   await action(() => query('[data-provider-id="magpie"]').click())
+  await action(() => query('.dsh003-picker-search-toggle').click())
   const search = query('.dsh003-picker-search')
   await action(() => {
     Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set.call(search, 'Qoder')
@@ -1293,10 +1294,7 @@ test('a Magpie model splits into two lines in the supplier view, other suppliers
   })
   assert.equal(rows().length, 1, 'the upstream name stays searchable even though the route moved to line two')
   assert.equal(rows()[0].querySelector('.dsh003-picker-model-name').textContent, 'Qwen3.8-Flash')
-  await action(() => {
-    Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set.call(search, '')
-    search.dispatchEvent(new win.Event('input', { bubbles: true }))
-  })
+  await action(() => query('.dsh003-picker-search-close').click())
 })
 
 test('a favourited Magpie model shows the gateway and route in its second line', async () => {
@@ -1311,16 +1309,14 @@ test('a favourited Magpie model shows the gateway and route in its second line',
   assert.equal(rows()[0].querySelector('.dsh003-picker-model-name').textContent, 'Qwen3.8-Flash')
   assert.equal(rows()[0].querySelector('.dsh003-picker-model-sub').textContent, 'Magpie · Qoder CN')
   // 搜索在收藏视图含提供方名与上游原名。
+  await action(() => query('.dsh003-picker-search-toggle').click())
   const search = query('.dsh003-picker-search')
   await action(() => {
     Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set.call(search, 'Qoder')
     search.dispatchEvent(new win.Event('input', { bubbles: true }))
   })
   assert.equal(rows().length, 1, 'the upstream name stays searchable in the favourites view')
-  await action(() => {
-    Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set.call(search, '')
-    search.dispatchEvent(new win.Event('input', { bubbles: true }))
-  })
+  await action(() => query('.dsh003-picker-search-close').click())
   await action(() => query('.dsh003-picker-prov-fav').click())
 })
 
@@ -1384,6 +1380,7 @@ test('cached lists still reflect favorite changes and catalog updates under an a
   await action(() => rows()[0].querySelector('.dsh003-picker-row-star').click())
   assert.equal(rows().length, 0)
   await action(() => query('[data-provider-id="cache-provider"]').click())
+  await action(() => query('.dsh003-picker-search-toggle').click())
   const search = query('.dsh003-picker-search')
   await action(() => {
     Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set.call(search, 'renamed')
@@ -1407,14 +1404,14 @@ test('reopening the panel returns to the favorites view without switching back t
   await action(() => rows()[0].querySelector('.dsh003-picker-row-star').click())
   await action(() => query('.dsh003-picker-prov-fav').click())
   assert.equal(query('.dsh003-picker-model-sub').textContent, 'DeepSeek')
-  await key(query('.dsh003-picker-search'), 'Escape')
+  await key(query('[role="dialog"]'), 'Escape')
   await open()
   assert.equal(query('.dsh003-picker-model-sub').textContent, 'DeepSeek')
   assert.equal(f.calls.length, 0, 'reopening must not resubmit the current model')
   assert.equal(query('[data-provider-id="deepseek-official"]').dataset.active, 'false')
   // 切回供应商视图后重开，应留在供应商视图（记忆双向生效）
   await action(() => query('[data-provider-id="deepseek-official"]').click())
-  await key(query('.dsh003-picker-search'), 'Escape')
+  await key(query('[role="dialog"]'), 'Escape')
   await open()
   assert.equal(query('.dsh003-picker-model-sub'), null)
 })
@@ -1429,11 +1426,11 @@ function supplierFixture(t) {
   f.publish({ groups, current: { provider: groups[0].id, model: 'A' } })
   const originalRect = win.HTMLElement.prototype.getBoundingClientRect
   t.mock.method(win.HTMLElement.prototype, 'getBoundingClientRect', function () {
-    if (this.classList.contains('dsh003-picker-prov-list')) return { top: 0, bottom: 120, height: 120, left: 0, right: 52, width: 52 }
+    if (this.classList.contains('dsh003-picker-prov-list')) return { top: 0, bottom: 42, height: 42, left: 0, right: 120, width: 120 }
     if (this.dataset.providerId) {
-      const offset = Number(this.style.transform.match(/translateY\(([-.\d]+)px\)/)?.[1] ?? 0)
-      const top = suppliers().indexOf(this) * 40 + offset - query('.dsh003-picker-prov-list').scrollTop
-      return { top, bottom: top + 36, height: 36, left: 8, right: 44, width: 36 }
+      const offset = Number(this.style.transform.match(/translateX\(([-.\d]+)px\)/)?.[1] ?? 0)
+      const left = suppliers().indexOf(this) * 36 + offset - query('.dsh003-picker-prov-list').scrollLeft
+      return { top: 0, bottom: 42, height: 42, left, right: left + 34, width: 34 }
     }
     return originalRect.call(this)
   })
@@ -1460,18 +1457,18 @@ test('supplier positions survive host reordering, temporary absence and new prov
 test('long press reorders without switching and persists across reopening and a fresh plugin load', async t => {
   const f = supplierFixture(t); await render(f.directory); await open()
   const ids = f.groups.map(p => p.id), first = suppliers()[0]
-  await pointer(first, 'pointerdown', 1, 20, 18); await f.hold()
+  await pointer(first, 'pointerdown', 1, 17, 20); await f.hold()
   assert.equal(first.dataset.dragging, 'true')
-  await pointer(win, 'pointermove', 1, 20, 115)
+  await pointer(win, 'pointermove', 1, 115, 20)
   assert.ok(query('.dsh003-picker-prov-insert-end'))
-  await pointer(win, 'pointerup', 1, 20, 115)
+  await pointer(win, 'pointerup', 1, 115, 20)
   await action(() => first.click())
   const expected = [ids[1], ids[2], ids[0]]
   assert.deepEqual(supplierIds(), expected)
   assert.equal(f.calls.length, 0)
   assert.match(query('.dsh003-picker-model-row').textContent, /Model A/)
   assert.deepEqual(savedOrder().filter(id => ids.includes(id)), expected)
-  await key(query('.dsh003-picker-search'), 'Escape'); await open()
+  await key(query('[role="dialog"]'), 'Escape'); await open()
   assert.deepEqual(supplierIds(), expected)
   runInNewContext(readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8'), { document: win.document, Element: win.Element, Node: win.Node, console, ResizeObserver: win.ResizeObserver, window: win })
   const reloaded = descriptor.factory(name => name === '@deepseek-ai/dsh-client-ui-primitives'
@@ -1484,56 +1481,56 @@ test('long press reorders without switching and persists across reopening and a 
 test('a short click switches the supplier; movement before the hold cancels sorting and click', async t => {
   const f = supplierFixture(t); await render(f.directory); await open()
   const second = suppliers()[1], before = savedOrder()
-  await pointer(second, 'pointerdown', 1, 20, 58)
-  await pointer(win, 'pointerup', 1, 20, 58); await action(() => second.click())
+  await pointer(second, 'pointerdown', 1, 53, 20)
+  await pointer(win, 'pointerup', 1, 53, 20); await action(() => second.click())
   assert.match(rows()[0].textContent, /Model B/)
   const first = suppliers()[0]
-  await pointer(first, 'pointerdown', 1, 20, 18)
-  await pointer(win, 'pointermove', 1, 20, 30)
-  await pointer(win, 'pointerup', 1, 20, 30); await action(() => first.click())
+  await pointer(first, 'pointerdown', 1, 17, 20)
+  await pointer(win, 'pointermove', 1, 30, 20)
+  await pointer(win, 'pointerup', 1, 30, 20); await action(() => first.click())
   assert.match(rows()[0].textContent, /Model B/)
   assert.deepEqual(savedOrder(), before)
 })
 test('Escape cancels supplier sorting and keeps the menu open', async t => {
   const f = supplierFixture(t); await render(f.directory); await open()
   const first = suppliers()[0], before = savedOrder()
-  await pointer(first, 'pointerdown', 1, 20, 18); await f.hold()
-  await pointer(win, 'pointermove', 1, 20, 115)
+  await pointer(first, 'pointerdown', 1, 17, 20); await f.hold()
+  await pointer(win, 'pointermove', 1, 115, 20)
   await key(first, 'Escape')
   assert.ok(query('[role="dialog"]'))
   assert.equal(query('[data-dragging="true"]'), null)
-  await pointer(win, 'pointerup', 1, 20, 115); await action(() => first.click())
+  await pointer(win, 'pointerup', 1, 115, 20); await action(() => first.click())
   assert.deepEqual(savedOrder(), before)
   assert.match(rows()[0].textContent, /Model A/)
 })
 test('supplier pointer ownership, cancellation and lost capture cannot save a preview', async t => {
   const f = supplierFixture(t); await render(f.directory); await open()
   const first = suppliers()[0], before = savedOrder()
-  await pointer(first, 'pointerdown', 1, 20, 18); await f.hold()
-  await pointer(win, 'pointermove', 2, 20, 115)
-  await pointer(win, 'pointerup', 2, 20, 115)
+  await pointer(first, 'pointerdown', 1, 17, 20); await f.hold()
+  await pointer(win, 'pointermove', 2, 115, 20)
+  await pointer(win, 'pointerup', 2, 115, 20)
   assert.equal(first.dataset.dragging, 'true')
-  await pointer(win, 'pointermove', 1, 20, 115)
-  await pointer(win, 'pointercancel', 1, 20, 115)
+  await pointer(win, 'pointermove', 1, 115, 20)
+  await pointer(win, 'pointercancel', 1, 115, 20)
   assert.deepEqual(savedOrder(), before)
-  await pointer(first, 'pointerdown', 1, 20, 18); await f.hold()
-  await pointer(win, 'pointermove', 1, 20, 115)
-  await pointer(first, 'lostpointercapture', 1, 20, 115)
-  await pointer(win, 'pointerup', 1, 20, 115)
+  await pointer(first, 'pointerdown', 1, 17, 20); await f.hold()
+  await pointer(win, 'pointermove', 1, 115, 20)
+  await pointer(first, 'lostpointercapture', 1, 115, 20)
+  await pointer(win, 'pointerup', 1, 115, 20)
   assert.deepEqual(savedOrder(), before)
   assert.equal(f.calls.length, 0)
 })
 test('supplier changes and closing remove active sort listeners without saving', async t => {
   const f = supplierFixture(t); await render(f.directory); await open()
   const first = suppliers()[0], before = savedOrder()
-  await pointer(first, 'pointerdown', 1, 20, 18); await f.hold()
-  await pointer(win, 'pointermove', 1, 20, 115)
+  await pointer(first, 'pointerdown', 1, 17, 20); await f.hold()
+  await pointer(win, 'pointermove', 1, 115, 20)
   await action(() => f.publish({ groups: [f.groups[0], f.groups[1]] }))
-  await pointer(win, 'pointerup', 1, 20, 115)
+  await pointer(win, 'pointerup', 1, 115, 20)
   assert.deepEqual(savedOrder(), before)
-  await pointer(first, 'pointerdown', 1, 20, 18); await f.hold()
+  await pointer(first, 'pointerdown', 1, 17, 20); await f.hold()
   await action(() => query('.dsh003-picker-btn').click())
-  await pointer(win, 'pointerup', 1, 20, 115)
+  await pointer(win, 'pointerup', 1, 115, 20)
   assert.deepEqual(savedOrder(), before)
   assert.equal(query('[role="dialog"]'), null)
 })
@@ -1541,7 +1538,7 @@ test('keyboard supplier reordering retains focus and leaves the selected model u
   const f = supplierFixture(t); await render(f.directory); await open()
   const first = suppliers()[0], ids = f.groups.map(p => p.id)
   await action(() => first.focus())
-  await action(() => first.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true, cancelable: true })))
+  await action(() => first.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'ArrowRight', altKey: true, bubbles: true, cancelable: true })))
   assert.deepEqual(supplierIds(), [ids[1], ids[0], ids[2]])
   assert.equal(win.document.activeElement, first)
   assert.equal(f.calls.length, 0)
@@ -1553,13 +1550,13 @@ test('holding a supplier at the viewport edge scrolls to destinations outside th
   const extra = ['D', 'E', 'F'].map(name => ({ id: `scroll-${name}`, name, models: [{ id: name, name }] }))
   const groups = [...f.groups, ...extra], ids = groups.map(p => p.id)
   f.publish({ groups }); await render(f.directory); await open()
-  await pointer(suppliers()[0], 'pointerdown', 1, 20, 18); await f.hold()
-  await pointer(win, 'pointermove', 1, 20, 115)
+  await pointer(suppliers()[0], 'pointerdown', 1, 17, 20); await f.hold()
+  await pointer(win, 'pointermove', 1, 115, 20)
   for (let index = 0; index < 5; index++) await f.scroll()
-  assert.equal(query('.dsh003-picker-prov-list').scrollTop, 50)
-  assert.equal(query('[data-insert="before"]').dataset.providerId, ids[4])
-  await pointer(win, 'pointerup', 1, 20, 115)
-  assert.deepEqual(supplierIds(), [ids[1], ids[2], ids[3], ids[0], ids[4], ids[5]])
+  assert.equal(query('.dsh003-picker-prov-list').scrollLeft, 50)
+  assert.equal(query('[data-insert="before"]').dataset.providerId, ids[5])
+  await pointer(win, 'pointerup', 1, 115, 20)
+  assert.deepEqual(supplierIds(), [ids[1], ids[2], ids[3], ids[4], ids[0], ids[5]])
   assert.equal(f.calls.length, 0)
 })
 
@@ -1598,13 +1595,18 @@ test('the search box shows the provider name and keeps a stable accessible name'
     { id: 'q', name: 'OpenCode Go', models: [{ id: 'b', name: 'Model B' }] },
   ] })
   await render(f.directory); await open()
+  assert.equal(query('[data-provider-id="p"]').getAttribute('data-tooltip-label'), 'Magpie')
+  assert.equal(query('[data-provider-id="q"]').getAttribute('data-tooltip-label'), 'OpenCode Go')
+  await action(() => query('.dsh003-picker-search-toggle').click())
   const input = query('.dsh003-picker-search')
   assert.equal(input.getAttribute('placeholder'), '搜索 Magpie 模型…')
   assert.equal(input.getAttribute('title'), '搜索 Magpie 模型…')
   assert.equal(input.getAttribute('aria-label'), '搜索模型…')
+  await action(() => query('.dsh003-picker-search-close').click())
   await action(() => query('[data-provider-id="q"]').click())
-  assert.equal(input.getAttribute('placeholder'), '搜索 OpenCode Go 模型…')
-  assert.equal(input.getAttribute('aria-label'), '搜索模型…')
+  await action(() => query('.dsh003-picker-search-toggle').click())
+  assert.equal(query('.dsh003-picker-search').getAttribute('placeholder'), '搜索 OpenCode Go 模型…')
+  assert.equal(query('.dsh003-picker-search').getAttribute('aria-label'), '搜索模型…')
 })
 
 test('the picker renders in English with no Chinese copy left behind', async () => {
@@ -1620,17 +1622,99 @@ test('the picker renders in English with no Chinese copy left behind', async () 
     groups: [{ id: 'open-code-go', name: 'OpenCode Go', models: [{ id: 'a', name: 'Model A',
       reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'high' } }] }],
   })
-  await action(() => root.render(React.createElement(plugin.ModelPickerButton, { directory: f.directory, t })))
+  await action(() => root.render(React.createElement(plugin.ModelPickerButton, { directory: f.directory, t, onOpenSettings: () => {} })))
   const trigger = query('.dsh003-picker-btn')
   assert.equal(trigger.getAttribute('aria-label'), 'Choose a model, currently Model A, reasoning effort High')
   await open()
+  assert.equal(query('[role="dialog"]').getAttribute('aria-label'), 'Choose a model')
+  assert.equal(query('[role="tablist"]').getAttribute('aria-label'), 'Providers')
+  assert.equal(query('.dsh003-picker-add-prov').getAttribute('aria-label'), 'Configure models & providers')
+  assert.equal(query('.dsh003-picker-search-toggle').getAttribute('aria-label'), 'Search models')
+  assert.equal(query('.dsh003-picker-row-star').getAttribute('aria-label'), 'Add to favourites')
+  assert.equal(query('.dsh003-picker-effort-sub').textContent, 'Reasoning effort')
+  await action(() => query('.dsh003-picker-search-toggle').click())
   const input = query('.dsh003-picker-search')
   assert.equal(input.getAttribute('placeholder'), 'Search OpenCode Go models…')
   assert.equal(input.getAttribute('aria-label'), 'Search models…')
-  assert.equal(query('[role="dialog"]').getAttribute('aria-label'), 'Choose a model')
-  assert.equal(query('[role="tablist"]').getAttribute('aria-label'), 'Providers')
-  assert.equal(query('.dsh003-picker-row-star').getAttribute('aria-label'), 'Add to favourites')
-  assert.equal(query('.dsh003-picker-effort-sub').textContent, 'Reasoning effort')
+  assert.equal(query('.dsh003-picker-search-close').getAttribute('aria-label'), 'Close search')
   assert.ok(!/[\u4e00-\u9fa5]/.test(win.document.body.textContent), 'no Chinese copy may remain in the English picker')
   assert.ok(!/[\u4e00-\u9fa5]/.test(trigger.getAttribute('aria-label')), 'the trigger label must be English too')
+})
+
+test('top bar places + at the tail of the scrolling provider rail and fixes only search on the right', async () => {
+  const f = fixture()
+  let opened = 0
+  await action(() => root.render(React.createElement(plugin.ModelPickerButton, {
+    directory: f.directory,
+    onOpenSettings: () => { opened += 1 },
+  })))
+  await open()
+  const actions = [...win.document.querySelectorAll('.dsh003-picker-topbar-actions button')]
+  assert.equal(actions.length, 1)
+  assert.ok(actions[0].classList.contains('dsh003-picker-search-toggle'), 'only search stays pinned on the right')
+  assert.equal(query('.dsh003-picker-topbar-sep'), null, 'no vertical divider in the top bar')
+
+  const railButtons = [...win.document.querySelectorAll('.dsh003-picker-prov-list button')]
+  const addBtn = railButtons.at(-1)
+  assert.ok(addBtn?.classList.contains('dsh003-picker-add-prov'), '+ must sit at the tail of the provider rail')
+  assert.equal(addBtn.dataset.providerId, undefined, '+ must not participate in provider drag sorting')
+
+  // Direct typing while panel is focused opens search with the typed character
+  await key(query('[role="dialog"]'), 'b')
+  const search = query('.dsh003-picker-search')
+  assert.ok(search)
+  assert.equal(search.value, 'b')
+  assert.equal(win.document.activeElement, search)
+  assert.equal(rows().length, 1)
+
+  // First Escape collapses search and clears query while keeping the panel open
+  await key(search, 'Escape')
+  assert.equal(query('.dsh003-picker-search'), null)
+  assert.ok(query('[role="dialog"]'))
+  assert.ok(rows().length >= 2)
+
+  // Clicking + closes the picker and invokes onOpenSettings
+  await action(() => query('.dsh003-picker-add-prov').click())
+  assert.equal(opened, 1)
+  assert.equal(query('[role="dialog"]'), null)
+})
+
+test('provider drag end-insertion indicator renders before the trailing + button', async t => {
+  const f = supplierFixture(t)
+  await action(() => root.render(React.createElement(plugin.ModelPickerButton, {
+    directory: f.directory,
+    onOpenSettings: () => {},
+  })))
+  await open()
+  const first = suppliers()[0]
+  await pointer(first, 'pointerdown', 1, 17, 20); await f.hold()
+  await pointer(win, 'pointermove', 1, 115, 20)
+  const insertEnd = query('.dsh003-picker-prov-insert-end')
+  const addBtn = query('.dsh003-picker-add-prov')
+  assert.ok(insertEnd && addBtn)
+  assert.ok(insertEnd.compareDocumentPosition(addBtn) & win.Node.DOCUMENT_POSITION_FOLLOWING,
+    'end insertion bar must stay before +')
+  await pointer(win, 'pointerup', 1, 115, 20)
+})
+
+test('vertical wheel on overflowing provider rail scrolls horizontally and prevents default; opening search cancels pending sort', async t => {
+  const f = supplierFixture(t)
+  await render(f.directory)
+  await open()
+  const list = query('.dsh003-picker-prov-list')
+  Object.defineProperty(list, 'scrollWidth', { configurable: true, value: 300 })
+  Object.defineProperty(list, 'clientWidth', { configurable: true, value: 120 })
+  const wheelEvent = new win.WheelEvent('wheel', { deltaY: 24, deltaX: 0, bubbles: true, cancelable: true })
+  await action(() => { list.dispatchEvent(wheelEvent) })
+  assert.equal(wheelEvent.defaultPrevented, true, 'non-passive wheel listener must prevent default')
+  assert.equal(list.scrollLeft, 24)
+
+  // Start holding a provider tab, then type a letter to expand search before hold timer fires
+  const first = suppliers()[0]
+  await pointer(first, 'pointerdown', 1, 17, 20)
+  await key(query('[role="dialog"]'), 'a')
+  assert.ok(query('.dsh003-picker-search'))
+  await f.hold()
+  await key(query('.dsh003-picker-search'), 'Escape')
+  assert.equal(query('[data-dragging="true"]'), null, 'pending hold timer must be cancelled when search opens')
 })

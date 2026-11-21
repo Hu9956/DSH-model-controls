@@ -107,8 +107,8 @@ try {
   }
   const after = await installAndCheck(profile, resolve(next), versionOf(next),
     previous === undefined ? 'install' : 'upgrade',
-    // 当前版本的文案标记：中英字典 + 搜索框间距修复 + 面板高度 392px
-    ['Search models…', '搜索模型…', '0 12px 0 32.25px', 'height: 392px'])
+    // 当前版本的文案标记：中英字典 + 顶栏原地变形搜索间距 + 面板高度 392px + 随滚「+」与 19px 收藏星 + 行悬停保黄星 + 搜索图标显式 14px
+    ['Search models…', '搜索模型…', '0 34px 0 32.25px', 'height: 392px', '.dsh003-picker-add-prov', '.dsh003-picker-prov-fav .dsh-icon', ':not([data-fav="true"]):not(:hover)', '.dsh003-picker-search-icon .dsh-icon'])
   console.log(`${previous === undefined ? 'install' : 'upgrade'} ok: ${after}`)
   console.log('install check: PASS')
 } finally {

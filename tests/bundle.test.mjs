@@ -101,3 +101,29 @@ test('borrows RC2 conversation.input.model.options child slot non-enumerably and
   cleanupSlot()
   assert.equal(mine.children, undefined)
 })
+
+test('onOpenSettings opens official sidebar.settings store at models section', () => {
+  let descriptor
+  runInNewContext(readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8'), {
+    window: { __ModuleLoader__: { load: value => { descriptor = value } } }, console,
+  })
+  const exports = descriptor.factory(name => name === '@deepseek-ai/dsh-client-ui-primitives' ? { Tooltip: () => null } : require(name))
+  const opened = []
+  let entry
+  const settingsStore = { create: () => ({ actions: { openSection: id => opened.push(id) } }) }
+  const services = {
+    slots: {
+      inject: (_key, register) => { register() },
+      entries: key => key === 'sidebar.settings' ? [{ component: () => null, store: settingsStore }] : [],
+      subscribe: () => () => {},
+      register: value => { if (value.name === 'conversation.input.model') entry = value; return () => {} },
+    },
+    sessions: { subagentAddress: () => undefined },
+    modelDirectories: { directoryFor: () => ({}) },
+  }
+  exports.apply({ get: name => services[name] })
+  const injected = entry.inject('test-session')
+  assert.equal(typeof injected.onOpenSettings, 'function')
+  injected.onOpenSettings()
+  assert.deepEqual(opened, ['models'])
+})

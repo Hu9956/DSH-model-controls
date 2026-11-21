@@ -9,11 +9,13 @@
 import * as React from 'react'
 import {
   CheckIcon,
+  CloseIcon,
+  PlusIcon,
   ScrollArea,
   SearchIcon,
   StarIcon,
-  attachScrollArea,
   isImeComposing,
+  useSlidingIndicator,
 } from '@kewen/dsh-ui'
 import { MenuSurface } from './MenuSurface'
 import { Tooltip } from './host-primitives'
@@ -132,6 +134,8 @@ export function ModelPickerPanel(props: {
   /** 模型或档位切换失败的提示；只显示文字，不配重试（重试目录救不回一次切换，重新点选即可）。 */
   selectionError?: string | null
   onSelectEffort?(effortId: string): void
+  /** 点击顶栏「+」打开宿主「设置 → 模型 / 供应商」页面（可选；外部复用时不传则隐藏）。 */
+  onOpenSettings?(): void
   onClose(): void
   /** 官方模型菜单附加选项插槽（RC2 conversation.input.model.options，如团队模式开关）。 */
   optionsSlot?: React.ReactNode
@@ -146,17 +150,43 @@ export function ModelPickerPanel(props: {
   const favorites = React.useSyncExternalStore(subscribeFavorites, getFavoriteSet)
   const panelRef = React.useRef<HTMLDivElement | null>(null)
   const searchRef = React.useRef<HTMLInputElement | null>(null)
-  // 触屏（手机、平板）不自动聚焦搜索框：一聚焦就弹出软键盘，挡住半个面板；要搜再点搜索框。
+  const searchToggleRef = React.useRef<HTMLButtonElement | null>(null)
+  const activeProvRef = React.useRef<HTMLButtonElement | null>(null)
+  const restoreFocusRef = React.useRef<'panel' | 'toggle' | null>(null)
+  const [searchExpanded, setSearchExpanded] = React.useState(false)
+  // 桌面端打开面板后把焦点落到面板容器上（触屏不自动抢焦点），方向键、Esc 与直接打字即刻生效。
   React.useLayoutEffect(() => {
     if (window.matchMedia?.('(pointer: coarse)').matches === true) return
-    searchRef.current?.focus({ preventScroll: true })
+    panelRef.current?.focus({ preventScroll: true })
   }, [])
 
-  React.useEffect(() => {
-    const el = providerSort.listRef.current
-    if (!el) return undefined
-    return attachScrollArea(el)
-  }, [providerSort.listRef])
+  React.useLayoutEffect(() => {
+    if (searchExpanded) {
+      const input = searchRef.current
+      if (input !== null) {
+        input.focus({ preventScroll: true })
+        const len = input.value.length
+        try { input.setSelectionRange(len, len) } catch { /* ignore */ }
+      }
+      return
+    }
+    const target = restoreFocusRef.current
+    restoreFocusRef.current = null
+    if (target === 'toggle') searchToggleRef.current?.focus({ preventScroll: true })
+    else if (target === 'panel') panelRef.current?.focus({ preventScroll: true })
+  }, [searchExpanded])
+
+  const openSearch = (initialQuery?: string): void => {
+    providerSort.cancel()
+    if (initialQuery !== undefined) setQuery(initialQuery)
+    setSearchExpanded(true)
+  }
+
+  const closeSearch = (focusTarget: 'panel' | 'toggle' = 'toggle'): void => {
+    restoreFocusRef.current = focusTarget
+    setQuery('')
+    setSearchExpanded(false)
+  }
 
   const t = props.t ?? fallbackTranslate
   const onPanelKeyDown = (event: React.KeyboardEvent): void => {
@@ -164,16 +194,43 @@ export function ModelPickerPanel(props: {
     if (event.key === 'Escape') {
       event.preventDefault()
       event.stopPropagation()
+      if (searchExpanded) {
+        closeSearch('panel')
+        return
+      }
       cancelDragRef.current?.()
       keyboardPreviewRef.current = false
       snapIndexRef.current = null
       props.onClose()
       return
     }
+    if (!searchExpanded) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
+        event.preventDefault()
+        openSearch()
+        return
+      }
+      if (!event.metaKey && !event.ctrlKey && !event.altKey) {
+        const target = event.target as HTMLElement | null
+        const inEditable = target !== null && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+        if (!inEditable) {
+          if (event.key === '/') {
+            event.preventDefault()
+            openSearch()
+            return
+          }
+          if (event.key.length === 1 && event.key !== ' ') {
+            event.preventDefault()
+            openSearch(event.key)
+            return
+          }
+        }
+      }
+    }
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
     const rows = Array.from(panelRef.current?.querySelectorAll<HTMLButtonElement>('.dsh003-picker-model-row') ?? [])
     const index = rows.indexOf(event.target as HTMLButtonElement)
-    if (event.target !== searchRef.current && index < 0) return
+    if (event.target !== panelRef.current && event.target !== searchRef.current && index < 0) return
     if (rows.length === 0) return
     event.preventDefault()
     const next = index < 0
@@ -211,13 +268,16 @@ export function ModelPickerPanel(props: {
     })
   }, [current?.provider, providers, providerSort.sorted])
 
-  // 视口自动滚动至当前激活模型
+  // 视口自动滚动至当前激活模型与当前激活供应商 Tab
   const activeRowRef = React.useRef<HTMLButtonElement | null>(null)
   React.useEffect(() => {
     if (activeRowRef.current) {
       activeRowRef.current.scrollIntoView({ block: 'nearest' })
     }
-  }, [activeProviderId, favView])
+    if (activeProvRef.current) {
+      activeProvRef.current.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    }
+  }, [activeProviderId, favView, searchExpanded])
 
   const normalized = query.trim().toLocaleLowerCase()
 
@@ -334,10 +394,10 @@ export function ModelPickerPanel(props: {
     startYRef.current = e.clientY
     dragRectRef.current = hitEl.getBoundingClientRect()
     dragRatioRef.current = null
-    // 点击轨道直达：pointerdown 即锁最近档
+    // 点击轨道直达：pointerdown 即锁最近档（轨道端帽半径 10px，珠心活动区间 [10, width - 10]）
     if (efforts !== undefined && efforts.length >= 2 && dragRectRef.current !== null) {
       const rect0 = dragRectRef.current
-      const raw0 = (e.clientX - rect0.left - 8) / Math.max(rect0.width - 16, 1)
+      const raw0 = (e.clientX - rect0.left - 10) / Math.max(rect0.width - 20, 1)
       lockSnap(Math.round(clamp(raw0, 0, 1) * (efforts.length - 1)))
     }
     try {
@@ -350,7 +410,7 @@ export function ModelPickerPanel(props: {
       // 拖动阈值：平面位移越过 5px 才进入跟手（区分点击与拖动）
       if (Math.hypot(ev.clientX - startXRef.current, ev.clientY - startYRef.current) < 5) return
       const rect = dragRectRef.current
-      const raw = (ev.clientX - rect.left - 8) / Math.max(rect.width - 16, 1)
+      const raw = (ev.clientX - rect.left - 10) / Math.max(rect.width - 20, 1)
       const clamped = clamp(raw, 0, 1)
       dragRatioRef.current = clamped
       setDragRatio(clamped)
@@ -413,6 +473,13 @@ export function ModelPickerPanel(props: {
   }, [favView, providers, favorites])
 
   const activeProvider = providers.find(p => p.id === activeProviderId) ?? providerSort.sorted[0]
+  // 接入 @kewen/dsh-ui 滑动指示器：切换收藏/供应商 Tab 时 220ms 平滑滑动圆头底线；
+  // 搜索态卸载供应商栏时传 false 回收，收起搜索重挂载后瞬时归位。
+  const activeTabKey = searchExpanded ? false : (favView ? '__fav__' : (activeProvider?.id ?? ''))
+  useSlidingIndicator(providerSort.listRef, activeTabKey, {
+    itemSelector: '.dsh003-picker-prov',
+    indicatorClass: 'dsh003-picker-prov-ind',
+  })
   const sourceRows = React.useMemo(() => {
     if (favView) return favoriteRows
     if (!activeProvider) return []
@@ -440,62 +507,27 @@ export function ModelPickerPanel(props: {
     toggleFavorite(providerId, modelId)
   }
 
+  // 原生 non-passive wheel 监听：垂直滚轮转横向滚动，且真正阻止事件穿透滚动底层页面。
+  React.useEffect(() => {
+    if (searchExpanded) return
+    const el = providerSort.listRef.current
+    if (el === null) return
+    const onWheel = (event: WheelEvent): void => {
+      if (el.scrollWidth <= el.clientWidth) return
+      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return
+      event.preventDefault()
+      el.scrollLeft += event.deltaY
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => { el.removeEventListener('wheel', onWheel) }
+  }, [searchExpanded, providerSort.listRef])
+
   return (
-    <MenuSurface ref={panelRef} className="dsh003-picker-panel" role="dialog" aria-label={t('dialogLabel')} style={props.containerStyle} onKeyDown={onPanelKeyDown}>
+    <MenuSurface ref={panelRef} tabIndex={-1} className="dsh003-picker-panel" role="dialog" aria-label={t('dialogLabel')} style={props.containerStyle} onKeyDown={onPanelKeyDown}>
       <div className="dsh003-picker-inner">
       <div className="dsh003-picker-body">
-        <div className="dsh003-picker-prov-col" role="tablist" aria-label={t('providerRailLabel')}>
-          <div className="dsh003-picker-prov-head">
-            <button
-              type="button"
-              className="dsh003-picker-prov dsh003-picker-prov-fav"
-              data-active={favView ? 'true' : 'false'}
-              aria-label={t('favoritesLabel')}
-              title={t('favoritesLabel')}
-              onClick={() => {
-                rememberedFavView = !favView
-                setFavView(!favView)
-              }}
-            >
-              <StarIcon size={14} inline={false} filled={favView} />
-            </button>
-          </div>
-          <div className="dsh003-picker-prov-divider" />
-          <div className="dsh-scroll-frame dsh003-picker-prov-scroll">
-            <div ref={providerSort.listRef} className="dsh-scroll-area dsh003-picker-prov-list" data-sorting={providerSort.drag ? 'true' : undefined}>
-              {providerSort.sorted.map(provider => (
-                <button
-                  key={provider.id}
-                  type="button"
-                  className="dsh003-picker-prov"
-                  data-provider-id={provider.id}
-                  data-dragging={providerSort.drag?.id === provider.id ? 'true' : undefined}
-                  data-insert={providerSort.drag?.before === provider.id ? 'before' : undefined}
-                  style={providerSort.drag?.id === provider.id ? { transform: `translateY(${providerSort.drag.offset}px)` } : undefined}
-                  data-active={!favView && provider.id === activeProvider?.id ? 'true' : 'false'}
-                  aria-label={displayProviderName(provider)}
-                  title={format(t('providerReorderHint'), { name: displayProviderName(provider) })}
-                  onPointerDown={event => providerSort.begin(event, provider.id)}
-                  onClickCapture={providerSort.suppressClick}
-                  onKeyDown={event => providerSort.keyboardMove(event, provider.id)}
-                  onContextMenu={event => event.preventDefault()}
-                  onClick={() => {
-                    rememberedFavView = false
-                    rememberedProviderId = provider.id
-                    setFavView(false)
-                    setActiveProviderId(provider.id)
-                  }}
-                >
-                  <ProviderLogo {...displayProviderIcon(provider)} badge={badges.get(provider.id)} />
-                </button>
-              ))}
-              {providerSort.drag?.before === null && <span className="dsh003-picker-prov-insert-end" aria-hidden="true" />}
-            </div>
-            <div className="dsh-scroll-thumb" aria-hidden="true" hidden />
-          </div>
-        </div>
-        <div className="dsh003-picker-model-col">
-          <div className="dsh003-picker-search-row">
+        {searchExpanded ? (
+          <div className="dsh003-picker-topbar dsh003-picker-topbar-searching">
             <div className="dsh003-picker-search-box">
               <span className="dsh003-picker-search-icon"><SearchIcon size={14} inline={false} /></span>
               <input
@@ -511,57 +543,172 @@ export function ModelPickerPanel(props: {
                   if (isImeComposing(e)) e.stopPropagation()
                 }}
               />
+              <Tooltip label={t('searchCloseLabel')} side="top" delayMs={120} portal>
+                <button
+                  type="button"
+                  className="dsh003-picker-top-btn dsh003-picker-search-close"
+                  aria-label={t('searchCloseLabel')}
+                  onClick={() => closeSearch('toggle')}
+                >
+                  <CloseIcon size={14} inline={false} />
+                </button>
+              </Tooltip>
             </div>
           </div>
-          <ScrollArea className="dsh003-picker-model-scroll" viewportClassName="dsh003-picker-model-list">
-            {visibleRows.length === 0 && <p className="dsh003-picker-empty">{emptyText}</p>}
-            {visibleRows.map(row => {
-              const key = favoriteKeyOf(row.providerId, row.modelId)
-              const active = row.providerId === current?.provider && row.modelId === current?.model
-              return (
-                <button
-                  key={key}
-                  ref={active ? activeRowRef : undefined}
-                  type="button"
-                  className="dsh003-picker-model-row"
-                  data-active={active ? 'true' : 'false'}
-                  data-sub={row.sub !== null ? 'true' : 'false'}
-                  onClick={() => pick(row.providerId, row.modelId)}
-                >
-                  {row.sub !== null ? (
-                    <span className="dsh003-picker-model-text">
-                      <ModelName name={row.primary} />
-                      <span className="dsh003-picker-model-sub">{row.sub}</span>
-                    </span>
-                  ) : (
-                    <ModelName name={row.primary} />
-                  )}
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    className="dsh003-picker-row-star"
-                    data-fav={favorites.has(key) ? 'true' : 'false'}
-                    aria-label={favorites.has(key) ? t('favoriteRemove') : t('favoriteAdd')}
-                    onClick={e => toggleStar(e, row.providerId, row.modelId)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        if (!e.repeat) toggleStar(e, row.providerId, row.modelId)
-                      }
+        ) : (
+          <div className="dsh003-picker-topbar">
+            <div className="dsh003-picker-prov-rail-wrap">
+              <div
+                ref={providerSort.listRef}
+                className="dsh003-picker-prov-list"
+                role="tablist"
+                aria-label={t('providerRailLabel')}
+                data-sorting={providerSort.drag ? 'true' : undefined}
+              >
+                <Tooltip label={t('favoritesLabel')} side="top" delayMs={120} portal>
+                  <button
+                    ref={favView ? activeProvRef : undefined}
+                    type="button"
+                    role="tab"
+                    aria-selected={favView}
+                    className="dsh003-picker-prov dsh003-picker-prov-fav"
+                    data-active={favView ? 'true' : 'false'}
+                    aria-label={t('favoritesLabel')}
+                    onClick={() => {
+                      rememberedFavView = !favView
+                      setFavView(!favView)
                     }}
                   >
-                    <StarIcon size={14} inline={false} filled={favorites.has(key)} />
-                  </span>
-                  {active && (
-                    <span className="dsh003-picker-row-check" aria-hidden="true">
-                      <CheckIcon size={14} inline={false} />
-                    </span>
-                  )}
+                    <StarIcon size={19} inline={false} filled={favView} />
+                  </button>
+                </Tooltip>
+                {providerSort.sorted.map(provider => {
+                  const isActive = !favView && provider.id === activeProvider?.id
+                  const providerLabel = displayProviderName(provider)
+                  return (
+                    <Tooltip
+                      key={provider.id}
+                      label={providerLabel}
+                      side="top"
+                      delayMs={120}
+                      portal
+                      disabled={providerSort.drag !== null}
+                    >
+                      <button
+                        ref={isActive ? activeProvRef : undefined}
+                        type="button"
+                        role="tab"
+                        aria-selected={isActive}
+                        className="dsh003-picker-prov"
+                        data-provider-id={provider.id}
+                        data-dragging={providerSort.drag?.id === provider.id ? 'true' : undefined}
+                        data-insert={providerSort.drag?.before === provider.id ? 'before' : undefined}
+                        style={providerSort.drag?.id === provider.id ? { transform: `translateX(${providerSort.drag.offset}px)` } : undefined}
+                        data-active={isActive ? 'true' : 'false'}
+                        aria-label={providerLabel}
+                        onPointerDown={event => providerSort.begin(event, provider.id)}
+                        onClickCapture={providerSort.suppressClick}
+                        onKeyDown={event => providerSort.keyboardMove(event, provider.id)}
+                        onContextMenu={event => event.preventDefault()}
+                        onClick={() => {
+                          rememberedFavView = false
+                          rememberedProviderId = provider.id
+                          setFavView(false)
+                          setActiveProviderId(provider.id)
+                        }}
+                      >
+                        <ProviderLogo {...displayProviderIcon(provider)} badge={badges.get(provider.id)} />
+                      </button>
+                    </Tooltip>
+                  )
+                })}
+                {providerSort.drag?.before === null && <span className="dsh003-picker-prov-insert-end" aria-hidden="true" />}
+                {props.onOpenSettings !== undefined && (
+                  <Tooltip label={t('manageProvidersLabel')} side="top" delayMs={120} portal>
+                    <button
+                      type="button"
+                      className="dsh003-picker-top-btn dsh003-picker-add-prov"
+                      aria-label={t('manageProvidersLabel')}
+                      onClick={() => props.onOpenSettings?.()}
+                    >
+                      <PlusIcon size={14} inline={false} />
+                    </button>
+                  </Tooltip>
+                )}
+              </div>
+            </div>
+            <div className="dsh003-picker-topbar-actions">
+              <Tooltip label={t('searchToggleLabel')} side="top" delayMs={120} portal>
+                <button
+                  ref={searchToggleRef}
+                  type="button"
+                  className="dsh003-picker-top-btn dsh003-picker-search-toggle"
+                  aria-label={t('searchToggleLabel')}
+                  onClick={() => openSearch()}
+                >
+                  <SearchIcon size={14} inline={false} />
                 </button>
-              )
-            })}
-          </ScrollArea>
-        </div>
+              </Tooltip>
+            </div>
+          </div>
+        )}
+        <ScrollArea className="dsh003-picker-model-scroll" viewportClassName="dsh003-picker-model-list">
+          {visibleRows.length === 0 && <p className="dsh003-picker-empty">{emptyText}</p>}
+          {visibleRows.map(row => {
+            const key = favoriteKeyOf(row.providerId, row.modelId)
+            const active = row.providerId === current?.provider && row.modelId === current?.model
+            return (
+              <button
+                key={key}
+                ref={active ? activeRowRef : undefined}
+                type="button"
+                className="dsh003-picker-model-row"
+                data-active={active ? 'true' : 'false'}
+                data-sub={row.sub !== null ? 'true' : 'false'}
+                onClick={() => pick(row.providerId, row.modelId)}
+              >
+                {row.sub !== null ? (
+                  <span className="dsh003-picker-model-text">
+                    <span className="dsh003-picker-model-title">
+                      <ModelName name={row.primary} />
+                      {active && (
+                        <span className="dsh003-picker-row-check" aria-hidden="true">
+                          <CheckIcon size={13} inline={false} />
+                        </span>
+                      )}
+                    </span>
+                    <span className="dsh003-picker-model-sub">{row.sub}</span>
+                  </span>
+                ) : (
+                  <span className="dsh003-picker-model-title">
+                    <ModelName name={row.primary} />
+                    {active && (
+                      <span className="dsh003-picker-row-check" aria-hidden="true">
+                        <CheckIcon size={13} inline={false} />
+                      </span>
+                    )}
+                  </span>
+                )}
+                <span
+                  role="button"
+                  tabIndex={0}
+                  className="dsh003-picker-row-star"
+                  data-fav={favorites.has(key) ? 'true' : 'false'}
+                  aria-label={favorites.has(key) ? t('favoriteRemove') : t('favoriteAdd')}
+                  onClick={e => toggleStar(e, row.providerId, row.modelId)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      if (!e.repeat) toggleStar(e, row.providerId, row.modelId)
+                    }
+                  }}
+                >
+                  <StarIcon size={14} inline={false} filled={favorites.has(key)} />
+                </span>
+              </button>
+            )
+          })}
+        </ScrollArea>
       </div>
       {/* 逐个提供方给出失败原因 + 重试。只显示一句「部分提供方加载失败」会让用户
           不知道该去改哪个配置；宿主其实已经在 failures 里给了 id / name / message。
@@ -634,7 +781,7 @@ export function ModelPickerPanel(props: {
               <span
                 className="dsh003-picker-fill"
                 style={{
-                  width: `calc(8px + (100% - 16px) * ${positionRatio})`,
+                  width: `calc(20px + (100% - 20px) * ${positionRatio})`,
                 }}
               />
               {efforts.map((level, i) => {
@@ -648,7 +795,7 @@ export function ModelPickerPanel(props: {
                     className="dsh003-picker-tick"
                     data-max={isMax ? 'true' : 'false'}
                     style={{
-                      left: `calc(8px + (100% - 16px) * ${tickRatio})`,
+                      left: `calc(10px + (100% - 20px) * ${tickRatio})`,
                     }}
                     title={tickTitle}
                   />
@@ -657,7 +804,7 @@ export function ModelPickerPanel(props: {
               <span
                 className="dsh003-picker-knob"
                 style={{
-                  left: `calc(8px + (100% - 16px) * ${positionRatio})`,
+                  left: `calc(10px + (100% - 20px) * ${positionRatio})`,
                 }}
               />
             </div>

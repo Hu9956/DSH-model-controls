@@ -5,6 +5,37 @@ type SessionId = Parameters<Pick<ISessions, 'subagentAddress'>['subagentAddress'
 type SlotEntry = {
   component: unknown
   children?: Record<string, unknown>
+  store?: {
+    create?: () => {
+      actions?: {
+        open?: () => void
+        openSection?: (sectionId: string) => void
+      }
+    }
+  }
+}
+
+/** 打开官方设置弹窗并直达「模型 / 供应商」（models）分区；宿主缺口时安全静默返回 false。 */
+function openModelSettings(slots: SlotsApi): boolean {
+  if (typeof slots.entries !== 'function') return false
+  for (const entry of slots.entries('sidebar.settings')) {
+    const create = entry.store?.create
+    if (typeof create !== 'function') continue
+    try {
+      const actions = create()?.actions
+      if (typeof actions?.openSection === 'function') {
+        actions.openSection('models')
+        return true
+      }
+      if (typeof actions?.open === 'function') {
+        actions.open()
+        return true
+      }
+    } catch {
+      // 宿主内部 store 形态变化时不拖垮模型选择器
+    }
+  }
+  return false
 }
 
 type SlotsApi = {
@@ -60,6 +91,11 @@ export const PICKER_LOCALE_NS = PICKER_NS
  * 挂载 @kewen/dsh-ui 共享样式块（引用计数版本仲裁）与本插件私有样式表，返回幂等组合清理函数。
  */
 export function mountStyles(): () => void {
+  // 清理旧版（<=0.2.45）未托管的 <style data-plugin="dsh-std-model-picker">，
+  // 防止不重启热升级后旧规则（如 .dsh003-picker-prov[data-active="true"] 灰底）残留污染新版界面。
+  if (typeof document !== 'undefined') {
+    document.querySelectorAll('style[data-plugin="dsh-std-model-picker"]').forEach(el => el.remove())
+  }
   const disposeUi = mountDshUiStyles()
   const disposePlugin = injectPluginStyles('@kewen/dsh-model-controls', pickerCss)
   let disposed = false
@@ -151,6 +187,9 @@ export function apply(ctx: ClientContext): void {
               available: sessions !== undefined
                 && sessions.subagentAddress(sessionId) === undefined,
               t: translate<PickerKey>(PICKER_NS, pickerZh),
+              ...(typeof slots.entries === 'function'
+                ? { onOpenSettings: () => { openModelSettings(slots) } }
+                : {}),
             }),
           },
           ModelControlsEntry,

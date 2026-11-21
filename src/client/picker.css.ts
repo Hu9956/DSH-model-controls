@@ -283,6 +283,7 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   padding: 0 !important;
   gap: 0 !important;
   border: 0 !important;
+  outline: none !important;
   color: var(--dsw-alias-label-primary) !important;
   box-sizing: border-box !important;
   overflow: visible !important;
@@ -298,127 +299,233 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   overflow: clip !important;
 }
 
-/* ③ 两栏主体（M2-005a 修订：两栏自面板顶部贯通——左栏收藏+提供方，右栏搜索+模型列表） */
+/* ③ 纵向主体（方案 3 顶栏收纳搜索）：顶栏（横滚供应商 Tab 末尾随滚 +，右侧固定 🔍；点 🔍 或直接打字原地变形为搜索条）→ 全宽模型列表 */
 .dsh003-picker-body {
   flex: 1 !important;
   min-height: 0 !important;
   display: flex !important;
-}
-.dsh003-picker-prov-col {
-  flex: none !important;
-  width: 52px !important;
-  display: flex !important;
   flex-direction: column !important;
-  border-right: 1px solid var(--dsw-alias-border-l1) !important;
+}
+.dsh003-picker-topbar {
+  position: relative !important;
+  flex: none !important;
+  height: 42px !important;
+  display: flex !important;
+  align-items: stretch !important;
+  /* 左侧 6px 使首项 ☆ 墨迹落在 16px 统一基线；右侧 8px 使 🔍 墨迹落在 17px，与模型行 ★ 严格同轴 */
+  padding: 0 8px 0 6px !important;
+  border-bottom: 1px solid var(--dsw-alias-border-l1) !important;
   box-sizing: border-box !important;
 }
-.dsh003-picker-prov-head {
-  flex: none !important;
-  display: flex !important;
-  justify-content: center !important;
-  padding: 8px 0 !important;
-}
-/* 收藏与供应商之间的分隔线：短缩进线（两侧 8px gutter），微微隔开不横跨 */
-.dsh003-picker-prov-divider {
-  flex: none !important;
-  height: 1px !important;
-  margin: 0 8px !important;
-  background: var(--dsw-alias-border-l1) !important;
-}
-.dsh003-picker-prov-scroll,
-.dsh003-picker-model-scroll {
+.dsh003-picker-prov-rail-wrap {
+  position: relative !important;
   flex: 1 !important;
-  min-height: 0 !important;
+  min-width: 0 !important;
+  display: flex !important;
+  align-items: stretch !important;
+  overflow: hidden !important;
 }
 .dsh003-picker-prov-list {
+  position: relative !important;
   flex: 1 !important;
-  min-height: 0 !important;
+  min-width: 0 !important;
   display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  /* M-054 R1 节奏对齐模型行：36+4=40px/行；顶部 7px 补偿左栏 divider 1px——首按钮与首模型行逐行像素对齐 */
-  gap: 4px !important;
-  padding: 7px 0 8px !important;
-  overflow-y: auto !important;
+  flex-direction: row !important;
+  align-items: stretch !important;
+  gap: 2px !important;
+  padding: 0 14px 0 0 !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: none !important;
   box-sizing: border-box !important;
-  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2) !important;
-  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2) !important;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent 100%) !important;
+  mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent 100%) !important;
+}
+.dsh003-picker-prov-list::-webkit-scrollbar {
+  display: none !important;
 }
 .dsh003-picker-prov {
+  position: relative !important;
   appearance: none !important;
-  display: flex !important;
+  display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  width: 36px !important;
-  height: 36px !important;
+  width: 34px !important;
+  height: 100% !important;
   flex: none !important;
-  border: 1px solid var(--dsw-alias-border-l1) !important;
-  border-radius: var(--dsw-radius-sm, 8px) !important;
-  corner-shape: var(--dsh-corner-shape, var(--dsw-corner-shape, round)) !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
   background: transparent !important;
-  color: var(--dsw-alias-label-secondary) !important;
+  color: var(--dsw-alias-label-tertiary) !important;
   font-size: 13px !important;
   font-weight: 600 !important;
   cursor: pointer !important;
   box-sizing: border-box !important;
-  transition: background 120ms ease, color 120ms ease, border-color 120ms ease !important;
+  transition: color 120ms ease !important;
 }
-.dsh003-picker-prov-list > .dsh003-picker-prov {
-  position: relative !important;
-  touch-action: none !important;
+.dsh003-picker-prov-list > [data-provider-id] {
+  touch-action: pan-x !important;
   user-select: none !important;
   -webkit-user-select: none !important;
 }
-.dsh003-picker-prov-list[data-sorting="true"] > .dsh003-picker-prov {
+.dsh003-picker-prov-list[data-sorting="true"] > [data-provider-id] {
   cursor: grabbing !important;
+  touch-action: none !important;
 }
 .dsh003-picker-prov[data-dragging="true"] {
   z-index: 1 !important;
-  background: var(--dsw-alias-interactive-bg-hover) !important;
   color: var(--dsw-alias-label-primary) !important;
   transition: none !important;
 }
 .dsh003-picker-prov[data-insert="before"]::before,
 .dsh003-picker-prov-insert-end {
   content: '' !important;
-  height: 1px !important;
-  width: 28px !important;
+  width: 2px !important;
+  height: 20px !important;
+  border-radius: 999px !important;
+  corner-shape: round !important;
   background: var(--dsw-alias-label-secondary) !important;
   pointer-events: none !important;
 }
 .dsh003-picker-prov[data-insert="before"]::before {
   position: absolute !important;
-  top: -3px !important;
-  left: 3px !important;
+  left: -2px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
 }
 .dsh003-picker-prov-insert-end {
   flex: none !important;
-  margin-top: -2px !important;
+  align-self: center !important;
+  margin: 0 -2px !important;
 }
 @media (hover: hover) {
   .dsh003-picker-prov:hover {
-    background: var(--dsw-alias-interactive-bg-hover) !important;
     color: var(--dsw-alias-label-primary) !important;
   }
 }
 .dsh003-picker-prov:focus-visible {
-  background: var(--dsw-alias-interactive-bg-hover) !important;
+  outline: none !important;
   color: var(--dsw-alias-label-primary) !important;
+}
+.dsh003-picker-prov:not([data-insert="before"]):focus-visible::before {
+  content: '' !important;
+  position: absolute !important;
+  inset: 6px 2px !important;
+  border-radius: var(--dsw-radius-sm, 8px) !important;
+  corner-shape: var(--dsh-corner-shape, var(--dsw-corner-shape, round)) !important;
+  box-shadow: 0 0 0 2px var(--dsh-focus-ring-color, var(--dsw-alias-border-l3)) !important;
+  pointer-events: none !important;
 }
 .dsh003-picker-prov[data-active="true"] {
-  background: var(--dsw-alias-interactive-bg-hover) !important;
   color: var(--dsw-alias-label-primary) !important;
 }
-/* 收藏项（左栏首项）：与提供方块同语言，激活时宿主语义暖黄实心星（M-053：星色语义统一黄系） */
+/* 激活指示底线：沿用 @kewen/dsh-ui UnderlineTabs 中性主色（浅色石墨灰 / 深色亮白），2px 圆头滑块；
+   未挂载滑动指示器前由 ::after 静态兜底，挂载 data-ind 后交由 .dsh003-picker-prov-ind 220ms 平滑滑动 */
+.dsh003-picker-prov[data-active="true"]::after {
+  content: '' !important;
+  position: absolute !important;
+  left: 7px !important;
+  right: 7px !important;
+  bottom: 0 !important;
+  height: 2px !important;
+  border-radius: 999px !important;
+  corner-shape: round !important;
+  background: var(--dsh-brand-fill, var(--dsw-alias-brand-primary)) !important;
+  pointer-events: none !important;
+}
+.dsh003-picker-prov-list[data-ind] .dsh003-picker-prov[data-active="true"]::after {
+  display: none !important;
+}
+.dsh003-picker-prov-ind {
+  position: absolute !important;
+  left: 0 !important;
+  bottom: 0 !important;
+  height: 2px !important;
+  background: transparent !important;
+  pointer-events: none !important;
+  width: var(--ind-w, 0);
+  transform: translateX(var(--ind-x, 0));
+  transition: transform var(--dsh-dur-expand, 220ms) var(--dsh-ease-out, cubic-bezier(.22, 1, .36, 1)), width var(--dsh-dur-expand, 220ms) var(--dsh-ease-out, cubic-bezier(.22, 1, .36, 1));
+}
+.dsh003-picker-prov-ind::after {
+  content: '' !important;
+  position: absolute !important;
+  left: 7px !important;
+  right: 7px !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  border-radius: 999px !important;
+  corner-shape: round !important;
+  background: var(--dsh-brand-fill, var(--dsw-alias-brand-primary)) !important;
+  pointer-events: none !important;
+}
+.dsh003-picker-prov-ind[data-instant] {
+  transition: none !important;
+}
+/* 拖拽排序期间隐藏滑动指示条，避免拖走激活 Tab 时底线残留在原槽位 */
+.dsh003-picker-prov-list[data-sorting="true"] .dsh003-picker-prov-ind {
+  opacity: 0 !important;
+}
+/* 收藏项（顶栏首项）：激活时宿主语义暖黄实心星（M-053：星色语义统一黄系）；
+   .dsh-icon 默认按 1em 跟随父级 font-size，而 .dsh003-picker-prov 为 13px 会把星星压成 13px（可见约 10.6px），
+   明显小于旁边 18px 满幅供应商 Logo 并制造视觉大空隙；显式定为 19px 盒 + 1.4 线宽（可见约 15.4×14.8px），与 18px 图标光学齐平。 */
+.dsh003-picker-prov-fav .dsh-icon {
+  width: 19px !important;
+  height: 19px !important;
+  stroke-width: 1.4 !important;
+}
 .dsh003-picker-prov-fav[data-active="true"] {
   color: var(--dsw-alias-state-warn-primary) !important;
 }
+.dsh003-picker-topbar-actions {
+  flex: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 2px !important;
+  padding-left: 2px !important;
+}
+.dsh003-picker-top-btn {
+  appearance: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: var(--dsw-radius-sm, 8px) !important;
+  corner-shape: var(--dsh-corner-shape, var(--dsw-corner-shape, round)) !important;
+  background: transparent !important;
+  color: var(--dsw-alias-label-secondary) !important;
+  cursor: pointer !important;
+  box-sizing: border-box !important;
+  transition: background 120ms ease, color 120ms ease !important;
+}
+/* 顶栏末尾「+」：随供应商栏一同横滚与渐隐，静止态颜色对齐未选中供应商，悬停态复用动作按钮浅底以区分 Tab */
+.dsh003-picker-add-prov {
+  flex: none !important;
+  align-self: center !important;
+  margin-left: 2px !important;
+  color: var(--dsw-alias-label-tertiary) !important;
+}
+@media (hover: hover) {
+  .dsh003-picker-top-btn:hover {
+    background: var(--dsw-alias-interactive-bg-hover) !important;
+    color: var(--dsw-alias-label-primary) !important;
+  }
+}
+.dsh003-picker-top-btn:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 2px var(--dsh-focus-ring-color, var(--dsw-alias-border-l3)) !important;
+  color: var(--dsw-alias-label-primary) !important;
+}
 /* 提供方 logo（M-051）：内联 SVG fill=currentColor，色彩继承按钮文本色
-   （secondary → hover/active primary），明暗主题零特判；20px 见方居中于 36px 按钮内盒 */
+   （tertiary → hover/active primary），明暗主题零特判；18px 见方居中于 34px 顶栏 Tab */
 .dsh003-provider-logo {
   display: block !important;
-  width: 20px !important;
-  height: 20px !important;
+  width: 18px !important;
+  height: 18px !important;
   flex: none !important;
   pointer-events: none !important;
 }
@@ -442,18 +549,18 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  font-size: 16px !important;
+  font-size: 15px !important;
   font-weight: 700 !important;
   line-height: 1 !important;
 }
-/* 协议角标：同网关按协议拆出的路由图标相同，右下角 12px 实心圆 + 镂空字母（R / A）区分。
-   图标在角标处挖一个半径 7.5px 的圆缺口（比角标大 1.5px），两者之间留出底色缝隙，不糊在一起。
-   全部继承文本色（secondary → hover/active primary），明暗主题与选中态零特判。 */
+/* 协议角标：同网关按协议拆出的路由图标相同，右下角 11px 实心圆 + 镂空字母（R / A）区分。
+   图标在角标处挖圆缺口，两者之间留出底色缝隙，不糊在一起。
+   全部继承文本色（tertiary → hover/active primary），明暗主题与选中态零特判。 */
 .dsh003-provider-mark {
   position: relative !important;
   display: block !important;
-  width: 20px !important;
-  height: 20px !important;
+  width: 18px !important;
+  height: 18px !important;
   flex: none !important;
   pointer-events: none !important;
 }
@@ -461,18 +568,18 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
 .dsh003-provider-mark > .dsh003-provider-initial {
   width: 100% !important;
   height: 100% !important;
-  -webkit-mask: radial-gradient(circle at 18px 18px, transparent 7.5px, #000 8px) !important;
-  mask: radial-gradient(circle at 18px 18px, transparent 7.5px, #000 8px) !important;
+  -webkit-mask: radial-gradient(circle at 16px 16px, transparent 6.8px, #000 7.3px) !important;
+  mask: radial-gradient(circle at 16px 16px, transparent 6.8px, #000 7.3px) !important;
 }
 .dsh003-provider-badge {
   position: absolute !important;
-  right: -4px !important;
-  bottom: -4px !important;
-  width: 12px !important;
-  height: 12px !important;
+  right: -3px !important;
+  bottom: -3px !important;
+  width: 11px !important;
+  height: 11px !important;
   display: block !important;
 }
-/* 触发按钮首字兜底微型徽标：16px 微圆角卡片，对齐左栏 36px 方框语言，中英文字号 11px 清晰不缩水 */
+/* 触发按钮首字兜底微型徽标：16px 微圆角卡片，中英文字号 11px 清晰不缩水 */
 .dsh003-provider-initial--sm {
   width: 16px !important;
   height: 16px !important;
@@ -490,21 +597,14 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   line-height: 1 !important;
   box-sizing: border-box !important;
 }
-.dsh003-picker-model-col {
+.dsh003-picker-model-scroll {
   flex: 1 !important;
-  min-width: 0 !important;
-  display: flex !important;
-  flex-direction: column !important;
-  box-sizing: border-box !important;
+  min-height: 0 !important;
 }
-.dsh003-picker-search-row {
-  flex: none !important;
-  padding: 8px !important;
-  box-sizing: border-box !important;
-}
-/* 搜索框：与模型行同语言（interactive-bg-hover 填充、radius-md、同高 40、左右边界对齐 gutter 8） */
+/* 顶栏原位展开搜索条：占据 42px 顶栏，最右端 × 与原搜索图标严格同位，零位移收起 */
 .dsh003-picker-search-box {
   position: relative !important;
+  flex: 1 !important;
   display: flex !important;
   align-items: center !important;
   min-width: 0 !important;
@@ -517,40 +617,47 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
      不变量见 tests/search-icon-spacing.test.mjs。 */
   left: 9.75px !important;
   display: inline-flex !important;
-  color: var(--dsw-alias-label-secondary) !important;
+  color: var(--dsw-alias-label-primary) !important;
   pointer-events: none !important;
+}
+.dsh003-picker-search-icon .dsh-icon {
+  width: 14px !important;
+  height: 14px !important;
 }
 .dsh003-picker-search {
   display: block !important;
   width: 100% !important;
   min-width: 0 !important;
-  height: 36px !important;
+  height: 100% !important;
   /* 左内边距 32.25：为 @kewen/dsh-ui SearchIcon 留位并让两侧可视间距严格相等（11.5px）。 */
-  padding: 0 12px 0 32.25px !important;
-  border: 1px solid transparent !important;
-  border-radius: var(--dsw-radius-sm, 8px) !important;
-  corner-shape: var(--dsh-corner-shape, var(--dsw-corner-shape, round)) !important;
-  background: var(--dsw-alias-interactive-bg-hover) !important;
+  padding: 0 34px 0 32.25px !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
   color: var(--dsw-alias-label-primary) !important;
-  font-size: 12px !important;
+  font-size: 12.5px !important;
   box-sizing: border-box !important;
   outline: none !important;
-  transition: border-color 120ms ease !important;
 }
 .dsh003-picker-search::placeholder {
-  color: var(--dsw-alias-label-secondary) !important;
+  color: var(--dsw-alias-label-tertiary) !important;
 }
-.dsh003-picker-search:focus-visible {
-  border-color: var(--dsh-focus-ring-color, var(--dsw-alias-border-l3)) !important;
+.dsh003-picker-search-close {
+  position: absolute !important;
+  right: 0 !important;
+}
+.dsh003-picker-search-close .dsh-icon {
+  width: 14px !important;
+  height: 14px !important;
 }
 .dsh003-picker-model-list {
   flex: 1 !important;
   min-height: 0 !important;
   display: flex !important;
   flex-direction: column !important;
-  gap: 4px !important;
+  gap: 2px !important;
   overflow-y: auto !important;
-  padding: 8px !important;
+  padding: 6px 8px 8px !important;
   box-sizing: border-box !important;
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2) !important;
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2) !important;
@@ -570,7 +677,7 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   align-items: center !important;
   gap: 8px !important;
   margin: 0 !important;
-  padding: 6px 12px !important;
+  padding: 6px 16px !important;
   font-size: 11px !important;
   line-height: 16px !important;
   color: var(--dsw-alias-label-secondary) !important;
@@ -603,12 +710,12 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   box-shadow: 0 0 0 2px var(--dsw-alias-border-l3) !important;
 }
 
-/* ⑤ 模型行（外层 16px - 8px padding = 8px 同心圆角） */
+/* ⑤ 模型行（外层 16px - 8px padding = 8px 同心圆角；左侧 8+8=16px 对齐全局 16px 基线；右侧 2px 抵消 24px 星标盒内留白，使星标中心 22px 与顶栏 🔍 严格同轴） */
 .dsh003-picker-model-row {
   display: flex !important;
   align-items: center !important;
   width: 100% !important;
-  padding: 6px 12px !important;
+  padding: 6px 2px 6px 8px !important;
   border: none !important;
   border-radius: var(--dsw-radius-sm, 8px) !important;
   corner-shape: var(--dsh-corner-shape, var(--dsw-corner-shape, round)) !important;
@@ -631,12 +738,11 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
 }
 /* 收藏视图两行制（M-054）：名 13px/1.3 + gap 1px + 副行 10px/1.2 收进 36px——行高由星标 24px 决定（与左栏按钮等高），内边距 6→3 让位 */
 .dsh003-picker-model-row[data-sub="true"] {
-  padding: 3px 12px !important;
+  padding: 3px 2px 3px 8px !important;
   /* 内容 35.9px 补齐整 36——收藏视图节距 40 与普通视图/供应商列严格一致（M-054 R1） */
   min-height: 36px !important;
 }
 .dsh003-picker-model-row[data-sub="true"] .dsh003-picker-model-name {
-  flex: none !important;
   line-height: 1.3 !important;
 }
 .dsh003-picker-model-text {
@@ -646,8 +752,17 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   flex-direction: column !important;
   gap: 1px !important;
 }
-.dsh003-picker-model-name {
+.dsh003-picker-model-title {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  min-width: 0 !important;
+}
+.dsh003-picker-model-row > .dsh003-picker-model-title {
   flex: 1 !important;
+}
+.dsh003-picker-model-name {
+  flex: 0 1 auto !important;
   min-width: 0 !important;
   font-size: 13px !important;
   font-weight: 500 !important;
@@ -665,74 +780,69 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
 }
+/* 常驻右侧空心星标（☆）：未收藏轻淡常驻不引起行尾重排，悬停或收藏后变暖黄实心（★） */
 .dsh003-picker-row-star {
   appearance: none !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  /* hover-reveal：宽度/间距瞬切（无位移动画），只留淡入——运动克制，长名行的瞬时重排藏在悬停首帧 */
-  width: 0 !important;
+  width: 24px !important;
   height: 24px !important;
-  margin-left: 0 !important;
+  margin-left: 6px !important;
   flex: none !important;
-  overflow: hidden !important;
   border: none !important;
   border-radius: var(--dsw-radius-sm, 8px) !important;
   corner-shape: var(--dsh-corner-shape, var(--dsw-corner-shape, round)) !important;
   background: transparent !important;
-  color: var(--dsw-alias-label-secondary) !important;
+  color: var(--dsw-alias-label-caption) !important;
   cursor: pointer !important;
   box-sizing: border-box !important;
-  opacity: 0 !important;
+  opacity: 0.68 !important;
   transition: color 120ms ease, opacity 120ms ease !important;
 }
-.dsh003-picker-row-star:focus-visible,
-.dsh003-picker-row-star[data-fav="true"] {
-  width: 24px !important;
-  margin-left: 8px !important;
+.dsh003-picker-row-star:not([data-fav="true"]):focus-visible {
   opacity: 1 !important;
+  color: var(--dsw-alias-label-secondary) !important;
 }
 @media (hover: hover) {
-  .dsh003-picker-model-row:hover .dsh003-picker-row-star {
-    width: 24px !important;
-    margin-left: 8px !important;
+  .dsh003-picker-model-row:hover .dsh003-picker-row-star:not([data-fav="true"]):not(:hover) {
     opacity: 1 !important;
+    color: var(--dsw-alias-label-secondary) !important;
   }
   /* hover 预览色=点击结果色（M-053：星色语义统一宿主暖黄，收藏后同色） */
   .dsh003-picker-row-star:hover {
+    opacity: 1 !important;
     color: var(--dsw-alias-state-warn-primary) !important;
   }
 }
+.dsh003-picker-row-star .dsh-icon {
+  width: 14px !important;
+  height: 14px !important;
+}
 .dsh003-picker-row-star[data-fav="true"] {
+  opacity: 1 !important;
   color: var(--dsw-alias-state-warn-primary) !important;
 }
 
-/* 选中态小勾：与星标/搜索同族几何单线（trailing check，居右常驻，24px 容器盒与星标按钮严格居中对齐） */
+/* 选中态小勾：紧随模型名末尾（不挤占右侧星标纵列），14px 紧凑盒不撑高两行视图 */
 .dsh003-picker-row-check {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  width: 24px !important;
-  height: 24px !important;
+  width: 14px !important;
+  height: 14px !important;
   flex: none !important;
-  color: var(--dsw-alias-label-primary) !important;
-  margin-left: 8px !important;
+  color: var(--dsw-alias-label-secondary) !important;
 }
-/* 当星标展开（收藏常驻或鼠标悬停）时，两盒紧挨（margin-left: 0），依靠两盒自带的各 5px 内留白形成天然通透的 10px 呼吸间隙 */
-.dsh003-picker-row-star[data-fav="true"] + .dsh003-picker-row-check,
-.dsh003-picker-row-star:focus-visible + .dsh003-picker-row-check {
-  margin-left: 0 !important;
-}
-@media (hover: hover) {
-  .dsh003-picker-model-row:hover .dsh003-picker-row-star + .dsh003-picker-row-check {
-    margin-left: 0 !important;
-  }
+.dsh003-picker-row-check .dsh-icon {
+  width: 13px !important;
+  height: 13px !important;
 }
 
-/* ⑥ 底部：思考强度单行集成条（左侧辅助标签+当前档名，右侧胶囊滑轨） */
+/* ⑥ 底部：思考强度单行集成条（左右 16px 与顶栏/模型名/官方选项区四层严格齐平） */
 .dsh003-picker-foot {
   flex: none !important;
-  padding: 6px 12px !important;
+  padding: 6px 16px !important;
   border-top: 1px solid var(--dsw-alias-border-l1) !important;
   display: flex !important;
   align-items: center !important;
@@ -790,13 +900,13 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   color: var(--dsw-alias-label-secondary) !important;
 }
 
-/* 右侧横向滑轨容器（槽：20px 高，8px 双轨圆角，与把手完全对齐） */
+/* 右侧横向滑轨容器（槽：20px 高胶囊圆角，两端半圆圆心在 10px 处，与首尾刻度及圆珠同心） */
 .dsh003-picker-slider {
   position: relative !important;
   flex: 1 1 auto !important;
   height: 20px !important;
-  border-radius: var(--dsw-radius-sm, 8px) !important;
-  corner-shape: var(--dsh-corner-shape, var(--dsw-corner-shape, round)) !important;
+  border-radius: 999px !important;
+  corner-shape: round !important;
   background: var(--dsw-alias-interactive-bg-hover) !important;
 }
 
@@ -811,7 +921,7 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
 }
 
 /* 刻度点：4px 细节奏点嵌在槽内（left 由行内样式按档数横向等距对齐珠心可达区），
-   纯装饰不承担交互语义；当前档由珠位/档名表达；蓝点=最强端=右端刻度 */
+   用半透主文字色保证在底轨与填充段上均有清晰对比；蓝点=最强端=右端刻度 */
 .dsh003-picker-tick {
   position: absolute !important;
   top: 50% !important;
@@ -819,7 +929,7 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   height: 4px !important;
   border-radius: 999px !important;
   corner-shape: round !important;
-  background: var(--dsw-alias-label-tertiary) !important;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 34%, transparent) !important;
   transform: translate(-50%, -50%) !important;
   pointer-events: none !important;
   transition: background 120ms ease !important;
@@ -829,29 +939,29 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   background: color-mix(in oklch, var(--dsw-alias-state-business-primary) 65%, var(--dsw-alias-bg-layer-1)) !important;
 }
 
-/* 滑过深灰段：自槽左端向右长到珠心，width 由行内样式按 ratio 计算 */
+/* 滑过填充段：自槽左端延伸包住圆珠右缘（calc(20px + (100% - 20px) * r)），胶囊整包零接缝凹口 */
 .dsh003-picker-fill {
   position: absolute !important;
   top: 0 !important;
   left: 0 !important;
   height: 100% !important;
-  border-radius: var(--dsw-radius-sm, 8px) !important;
-  corner-shape: var(--dsh-corner-shape, var(--dsw-corner-shape, round)) !important;
+  border-radius: 999px !important;
+  corner-shape: round !important;
   background: var(--dsw-alias-interactive-bg-active) !important;
   pointer-events: none !important;
   transition: width 120ms ease !important;
 }
 
-/* 竖向扁药丸把手：16px 宽 × 20px 高（贴满槽高，静止零空隙零漏影），8px 双轨圆角；hover/active
+/* 正圆滑珠：18px × 18px 居中于 20px 胶囊槽（上下各留 1px 呼吸边）；hover/active
    触感 + focus ring 由命中层兄弟选择器驱动（命中层在 DOM 最前，~ 反选后面的视觉层） */
 .dsh003-picker-knob {
   position: absolute !important;
   top: 50% !important;
-  width: 16px !important;
-  height: 20px !important;
+  width: 18px !important;
+  height: 18px !important;
   border: 1px solid var(--dsw-alias-border-l1) !important;
-  border-radius: var(--dsw-radius-sm, 8px) !important;
-  corner-shape: var(--dsh-corner-shape, var(--dsw-corner-shape, round)) !important;
+  border-radius: 999px !important;
+  corner-shape: round !important;
   background: var(--dsw-alias-bg-layer-1) !important;
   box-shadow: var(--dsw-shadow-lv1) !important;
   box-sizing: border-box !important;
@@ -880,7 +990,8 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease !important;
 }
 
-/* 深色模式同源色阶覆盖（基于 --dsw-alias-* 派生，零硬编码 #hex，继承 M-069 明度对比度） */
+/* 深色模式同源色阶覆盖（基于 --dsw-alias-* 派生，零硬编码 #hex）：
+   保留 M-069 轨道与已填充段明度对比，圆珠提亮至与顶栏激活线同源亮灰白 */
 body[data-ds-dark-theme] {
   --dsh003-effort-track: color-mix(in oklab, var(--dsw-alias-bg-layer-3) 72%, var(--dsw-alias-label-caption));
   --dsh003-effort-fill: color-mix(in oklab, var(--dsw-alias-label-secondary) 58%, var(--dsw-alias-bg-layer-3));
@@ -895,14 +1006,14 @@ body[data-ds-dark-theme] .dsh003-picker-tick[data-max='true'] {
   background: var(--dsw-static-deepseek-400) !important;
 }
 body[data-ds-dark-theme] .dsh003-picker-knob {
-  background: var(--dsw-alias-label-tertiary) !important;
+  background: var(--dsh-brand-fill, var(--dsw-alias-label-primary)) !important;
 }
 
 /* ⑦ 官方扩展选项区（RC2 conversation.input.model.options，如 Agent 团队模式开关）：
-   置于思考强度条下方；无注册项或渲染为空时自动隐藏，不额外占高。 */
+   置于思考强度条下方；左右 8px 叠加宿主行自带 8px 落到全局 16px 基线，且悬停高亮条外距与模型列表一致。 */
 .dsh003-picker-options {
   flex: none !important;
-  padding: 4px !important;
+  padding: 4px 8px !important;
   border-top: 1px solid var(--dsw-alias-border-l1) !important;
   box-sizing: border-box !important;
 }

@@ -29,9 +29,11 @@ export interface ModelPickerButtonProps {
   t?: Translate<PickerKey>
   /** 宿主子插槽渲染器（RC2 conversation.input.model.options 等）。 */
   renderSlot?: (key: string, props: Record<string, unknown>) => React.ReactNode
+  /** 打开宿主「设置 → 模型 / 供应商」页面。 */
+  onOpenSettings?(): void
 }
 
-export function ModelPickerButton({ locked = false, directory, t = fallbackTranslate, renderSlot }: ModelPickerButtonProps): React.ReactNode {
+export function ModelPickerButton({ locked = false, directory, t = fallbackTranslate, renderSlot, onOpenSettings }: ModelPickerButtonProps): React.ReactNode {
   const adapter = React.useMemo(() => createCatalogAdapter(directory), [directory])
   const catalog = React.useSyncExternalStore(adapter.subscribe, adapter.getSnapshot)
   const [selectionError, setSelectionError] = React.useState<string | null>(null)
@@ -95,7 +97,7 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
       closeMenu()
     }
     const onKeyDown = (e: KeyboardEvent): void => {
-      if (isImeComposing(e)) return
+      if (isImeComposing(e) || e.defaultPrevented) return
       if (e.key === 'Escape') {
         e.preventDefault()
         closeMenu(true)
@@ -335,6 +337,10 @@ export function ModelPickerButton({ locked = false, directory, t = fallbackTrans
           containerStyle={pos}
           onPick={pick}
           onSelectEffort={handleSelectEffort}
+          onOpenSettings={onOpenSettings === undefined ? undefined : () => {
+            closeMenu(false)
+            onOpenSettings()
+          }}
           onClose={() => closeMenu(true)}
           optionsSlot={renderSlot?.('conversation.input.model.options', {
             locked,

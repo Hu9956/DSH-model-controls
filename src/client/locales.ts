@@ -93,7 +93,9 @@ export const settingsZh: Record<SettingsKey, string> = {
 /** Picker-panel locale keys. */
 export type PickerKey =
   | 'searchNeutral' | 'searchFavorites' | 'searchProvider' | 'searchProviderShort'
+  | 'searchToggleLabel' | 'searchCloseLabel'
   | 'dialogLabel' | 'providerRailLabel' | 'favoritesLabel' | 'favoriteAdd' | 'favoriteRemove'
+  | 'manageProvidersLabel'
   | 'providerReorderHint' | 'effortLabel'
   | 'emptyFavorites' | 'emptyNoMatch' | 'loadingCatalog' | 'loadFailed' | 'emptyProvider' | 'emptyCatalog'
   | 'partialProviders' | 'effortUnsupported' | 'effortNoneShort' | 'effortNoneTitle' | 'retry' | 'providerLoadFailed'
@@ -106,12 +108,15 @@ export const pickerEn: Record<PickerKey, string> = {
   searchFavorites: 'Search favourites…',
   searchProvider: 'Search {name} models…',
   searchProviderShort: 'Search {name}…',
+  searchToggleLabel: 'Search models',
+  searchCloseLabel: 'Close search',
   dialogLabel: 'Choose a model',
   providerRailLabel: 'Providers',
   favoritesLabel: 'Favourites',
   favoriteAdd: 'Add to favourites',
   favoriteRemove: 'Remove from favourites',
-  providerReorderHint: '{name} · hold to reorder (Alt + ↑/↓)',
+  manageProvidersLabel: 'Configure models & providers',
+  providerReorderHint: '{name} · hold to reorder (Alt + ←/→)',
   effortLabel: 'Reasoning effort',
   emptyFavorites: 'No favourites yet. Star a model to keep it here.',
   emptyNoMatch: 'No matching models.',
@@ -147,12 +152,15 @@ export const pickerZh: Record<PickerKey, string> = {
   searchFavorites: '搜索收藏模型…',
   searchProvider: '搜索 {name} 模型…',
   searchProviderShort: '搜索 {name}…',
+  searchToggleLabel: '搜索模型',
+  searchCloseLabel: '收起搜索',
   dialogLabel: '选择模型',
   providerRailLabel: '提供方',
   favoritesLabel: '收藏夹',
   favoriteAdd: '收藏',
   favoriteRemove: '取消收藏',
-  providerReorderHint: '{name} · 长按拖动排序（Alt + ↑/↓）',
+  manageProvidersLabel: '配置模型与提供方',
+  providerReorderHint: '{name} · 长按拖动排序（Alt + ←/→）',
   effortLabel: '思考深度',
   emptyFavorites: '暂无收藏；点击模型行右侧的星标即可收藏。',
   emptyNoMatch: '没有匹配的模型。',

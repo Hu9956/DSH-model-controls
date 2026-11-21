@@ -25,7 +25,7 @@ export function useProviderSort<T extends { id: string }>(providers: readonly T[
     if (list === null || sorted.length < 2) return
     const pointerId = event.pointerId
     const originX = event.clientX, originY = event.clientY
-    const origin = element.getBoundingClientRect(), originScroll = list.scrollTop
+    const origin = element.getBoundingClientRect(), originScroll = list.scrollLeft
     const ids = sorted.map(provider => provider.id)
     let x = originX, y = originY
     let active = false, done = false
@@ -37,12 +37,12 @@ export function useProviderSort<T extends { id: string }>(providers: readonly T[
       const candidates = Array.from(list.querySelectorAll<HTMLButtonElement>('[data-provider-id]')).filter(button => button.dataset.providerId !== id)
       before = candidates.find(button => {
         const rect = button.getBoundingClientRect()
-        return y < rect.top + rect.height / 2
+        return x < rect.left + rect.width / 2
       })?.dataset.providerId ?? null
-      const baseTop = origin.top - (list.scrollTop - originScroll)
-      const desiredTop = origin.top + y - originY
-      const top = Math.max(bounds.top, Math.min(bounds.bottom - origin.height, desiredTop))
-      const offset = top - baseTop
+      const baseLeft = origin.left - (list.scrollLeft - originScroll)
+      const desiredLeft = origin.left + x - originX
+      const left = Math.max(bounds.left, Math.min(bounds.right - origin.width, desiredLeft))
+      const offset = left - baseLeft
       setDrag(previous => previous?.id === id && previous.before === before && previous.offset === offset
         ? previous : { id, before, offset })
     }
@@ -81,6 +81,7 @@ export function useProviderSort<T extends { id: string }>(providers: readonly T[
     const onUp = (e: PointerEvent): void => {
       if (e.pointerId !== pointerId) return
       if (active) {
+        x = e.clientX
         y = e.clientY
         update()
         blockedClick.current = id
@@ -96,20 +97,20 @@ export function useProviderSort<T extends { id: string }>(providers: readonly T[
       element.focus({ preventScroll: true })
     }
     const holdTimer = window.setTimeout(() => {
-      if (done) return
+      if (done || !list.isConnected) { cancel(); return }
       active = true
       blockedClick.current = id
       try { element.setPointerCapture(pointerId) } catch { /* Window listeners still cover the pointer. */ }
       update()
-      // Scroll only during a held drag at the edge of the supplier viewport.
+      // Scroll horizontally during a held drag at the left/right edge of the supplier rail.
       scrollTimer = window.setInterval(() => {
         if (done || !list.isConnected) { cancel(); return }
         const bounds = list.getBoundingClientRect()
-        const direction = y < bounds.top + 18 ? -1 : y > bounds.bottom - 18 ? 1 : 0
+        const direction = x < bounds.left + 18 ? -1 : x > bounds.right - 18 ? 1 : 0
         if (direction !== 0) {
-          const previousScroll = list.scrollTop
-          list.scrollTop += direction * 10
-          if (list.scrollTop !== previousScroll) update()
+          const previousScroll = list.scrollLeft
+          list.scrollLeft += direction * 10
+          if (list.scrollLeft !== previousScroll) update()
         }
       }, 50)
     }, 300)
@@ -129,12 +130,13 @@ export function useProviderSort<T extends { id: string }>(providers: readonly T[
   }
   const keyboardMove = (event: React.KeyboardEvent, id: string): void => {
     blockedClick.current = null
-    if (!event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return
+    if (!event.altKey || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return
     event.preventDefault()
     cancelRef.current?.()
     const ids = sorted.map(provider => provider.id), index = ids.indexOf(id)
-    if (event.key === 'ArrowUp' && index > 0) moveProvider(ids, id, ids[index - 1]!)
-    if (event.key === 'ArrowDown' && index < ids.length - 1) moveProvider(ids, id, ids[index + 2] ?? null)
+    if (event.key === 'ArrowLeft' && index > 0) moveProvider(ids, id, ids[index - 1]!)
+    if (event.key === 'ArrowRight' && index < ids.length - 1) moveProvider(ids, id, ids[index + 2] ?? null)
   }
-  return { sorted, listRef, drag, begin, suppressClick, keyboardMove }
+  const cancel = (): void => { cancelRef.current?.() }
+  return { sorted, listRef, drag, begin, cancel, suppressClick, keyboardMove }
 }
