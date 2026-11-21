@@ -658,17 +658,34 @@ export function ModelPickerPanel(props: {
             const key = favoriteKeyOf(row.providerId, row.modelId)
             const active = row.providerId === current?.provider && row.modelId === current?.model
             return (
-              <button
+              <div
                 key={key}
-                ref={active ? activeRowRef : undefined}
-                type="button"
-                className="dsh003-picker-model-row"
+                className="dsh003-picker-model-item"
                 data-active={active ? 'true' : 'false'}
                 data-sub={row.sub !== null ? 'true' : 'false'}
-                onClick={() => pick(row.providerId, row.modelId)}
               >
-                {row.sub !== null ? (
-                  <span className="dsh003-picker-model-text">
+                <button
+                  ref={active ? activeRowRef : undefined}
+                  type="button"
+                  className="dsh003-picker-model-row"
+                  data-active={active ? 'true' : 'false'}
+                  data-sub={row.sub !== null ? 'true' : 'false'}
+                  aria-current={active ? 'true' : undefined}
+                  onClick={() => pick(row.providerId, row.modelId)}
+                >
+                  {row.sub !== null ? (
+                    <span className="dsh003-picker-model-text">
+                      <span className="dsh003-picker-model-title">
+                        <ModelName name={row.primary} />
+                        {active && (
+                          <span className="dsh003-picker-row-check" aria-hidden="true">
+                            <CheckIcon size={13} inline={false} />
+                          </span>
+                        )}
+                      </span>
+                      <span className="dsh003-picker-model-sub">{row.sub}</span>
+                    </span>
+                  ) : (
                     <span className="dsh003-picker-model-title">
                       <ModelName name={row.primary} />
                       {active && (
@@ -677,35 +694,18 @@ export function ModelPickerPanel(props: {
                         </span>
                       )}
                     </span>
-                    <span className="dsh003-picker-model-sub">{row.sub}</span>
-                  </span>
-                ) : (
-                  <span className="dsh003-picker-model-title">
-                    <ModelName name={row.primary} />
-                    {active && (
-                      <span className="dsh003-picker-row-check" aria-hidden="true">
-                        <CheckIcon size={13} inline={false} />
-                      </span>
-                    )}
-                  </span>
-                )}
-                <span
-                  role="button"
-                  tabIndex={0}
+                  )}
+                </button>
+                <button
+                  type="button"
                   className="dsh003-picker-row-star"
                   data-fav={favorites.has(key) ? 'true' : 'false'}
                   aria-label={favorites.has(key) ? t('favoriteRemove') : t('favoriteAdd')}
                   onClick={e => toggleStar(e, row.providerId, row.modelId)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      if (!e.repeat) toggleStar(e, row.providerId, row.modelId)
-                    }
-                  }}
                 >
                   <StarIcon size={14} inline={false} filled={favorites.has(key)} />
-                </span>
-              </button>
+                </button>
+              </div>
             )
           })}
         </ScrollArea>

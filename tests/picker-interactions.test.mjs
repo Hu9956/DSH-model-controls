@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 import { runInNewContext } from 'node:vm'
 import { JSDOM } from 'jsdom'
 import { pickerPosition } from '../src/client/picker-position.ts'
+import { pickerCss } from '../src/client/picker.css.ts'
 import { apply as applyHost } from '../lib/index.js'
 import { pickerEn, pickerZh, settingsEn, settingsZh } from '../src/client/locales.ts'
 
@@ -131,6 +132,7 @@ function fixture() {
 const query = selector => win.document.querySelector(selector)
 const queryAll = selector => [...win.document.querySelectorAll(selector)]
 const rows = () => [...win.document.querySelectorAll('.dsh003-picker-model-row')]
+const items = () => [...win.document.querySelectorAll('.dsh003-picker-model-item')]
 const action = async fn => { await act(async () => { fn() }) }
 const render = async directory => { await action(() => root.render(React.createElement(plugin.ModelPickerButton, { directory }))) }
 const open = async () => { await action(() => query('.dsh003-picker-btn').click()) }
@@ -1144,7 +1146,7 @@ test('explicit gateway identity changes only display, preserving provider/model 
   assert.equal(query('.dsh003-picker-btn .dsh003-provider-logo svg')?.getAttribute('viewBox'), '0 5 44 34')
   await open()
   assert.equal(query('[data-provider-id="deepseek-official"]').getAttribute('aria-label'), 'Magpie')
-  await action(() => rows()[0].querySelector('.dsh003-picker-row-star').click())
+  await action(() => items()[0].querySelector('.dsh003-picker-row-star').click())
   await action(() => query('.dsh003-picker-prov-fav').click())
   assert.equal(query('.dsh003-picker-model-sub').textContent, 'Magpie')
   assert.deepEqual(JSON.parse(win.localStorage.getItem('dsh003.model-picker.favorites')).includes('deepseek-official/opencode-go/space-bunny-free'), true)
@@ -1182,7 +1184,7 @@ test('removing Magpie routing restores button, supplier and existing favorite id
   pageLoad(); await render(f.directory); await open()
   assert.equal(query('[data-provider-id="deepseek-official"]').getAttribute('aria-label'), 'Magpie')
   assert.equal(query('.dsh003-picker-btn svg')?.getAttribute('viewBox'), '0 5 44 34')
-  const star = rows()[0].querySelector('.dsh003-picker-row-star')
+  const star = items()[0].querySelector('.dsh003-picker-row-star')
   if (star.dataset.fav !== 'true') await action(() => star.click())
   await action(() => query('.dsh003-picker-prov-fav').click())
   assert.equal(query('.dsh003-picker-model-sub').textContent, 'Magpie')
@@ -1304,7 +1306,7 @@ test('a favourited Magpie model shows the gateway and route in its second line',
     groups: [{ id: 'magpie', name: 'Magpie', models: [{ id: 'm1', name: 'Qwen3.8-Flash · Qoder CN' }] }],
   })
   await render(f.directory); await open()
-  await action(() => rows()[0].querySelector('.dsh003-picker-row-star').click())
+  await action(() => items()[0].querySelector('.dsh003-picker-row-star').click())
   await action(() => query('.dsh003-picker-prov-fav').click())
   assert.equal(rows()[0].querySelector('.dsh003-picker-model-name').textContent, 'Qwen3.8-Flash')
   assert.equal(rows()[0].querySelector('.dsh003-picker-model-sub').textContent, 'Magpie · Qoder CN')
@@ -1373,11 +1375,11 @@ test('cached lists still reflect favorite changes and catalog updates under an a
   const group = { id: 'cache-provider', name: 'Cache Provider', models: [{ id: 'unique', name: 'Original name' }] }
   f.publish({ current: { provider: group.id, model: 'unique' }, groups: [group] })
   await render(f.directory); await open()
-  await action(() => rows()[0].querySelector('.dsh003-picker-row-star').click())
+  await action(() => items()[0].querySelector('.dsh003-picker-row-star').click())
   await action(() => query('.dsh003-picker-prov-fav').click())
   assert.equal(rows().length, 1)
   assert.match(rows()[0].textContent, /Original name/)
-  await action(() => rows()[0].querySelector('.dsh003-picker-row-star').click())
+  await action(() => items()[0].querySelector('.dsh003-picker-row-star').click())
   assert.equal(rows().length, 0)
   await action(() => query('[data-provider-id="cache-provider"]').click())
   await action(() => query('.dsh003-picker-search-toggle').click())
@@ -1401,7 +1403,7 @@ test('reopening the panel returns to the favorites view without switching back t
   f.publish({ current: { provider: 'deepseek-official', model: 'step-5' }, groups })
   await render(f.directory); await open()
   assert.equal(query('.dsh003-picker-model-sub'), null, 'the supplier list shows the model name alone')
-  await action(() => rows()[0].querySelector('.dsh003-picker-row-star').click())
+  await action(() => items()[0].querySelector('.dsh003-picker-row-star').click())
   await action(() => query('.dsh003-picker-prov-fav').click())
   assert.equal(query('.dsh003-picker-model-sub').textContent, 'DeepSeek')
   await key(query('[role="dialog"]'), 'Escape')
@@ -1717,4 +1719,43 @@ test('vertical wheel on overflowing provider rail scrolls horizontally and preve
   await f.hold()
   await key(query('.dsh003-picker-search'), 'Escape')
   assert.equal(query('[data-dragging="true"]'), null, 'pending hold timer must be cancelled when search opens')
+})
+
+test('each favourite star is a native button outside the row button and toggles the favourite on click', async () => {
+  const f = fixture(); await render(f.directory); await open()
+  const stars = queryAll('.dsh003-picker-row-star')
+  assert.equal(stars.length, rows().length)
+  for (const star of stars) {
+    assert.equal(star.tagName, 'BUTTON')
+    assert.equal(star.parentElement.closest('button'), null, 'star must not be nested inside another button')
+    assert.equal(star.getAttribute('aria-label'), pickerZh.favoriteAdd)
+  }
+  await action(() => stars[0].click())
+  const toggled = queryAll('.dsh003-picker-row-star')[0]
+  assert.equal(toggled.dataset.fav, 'true')
+  assert.equal(toggled.getAttribute('aria-label'), pickerZh.favoriteRemove)
+  assert.equal(f.calls.length, 0, 'starring must not pick the model')
+  await action(() => toggled.click())
+  assert.equal(queryAll('.dsh003-picker-row-star')[0].dataset.fav, 'false')
+})
+
+test('only the current model row exposes aria-current', async () => {
+  const f = fixture(); await render(f.directory); await open()
+  const marked = queryAll('.dsh003-picker-model-row[aria-current]')
+  assert.equal(marked.length, 1)
+  assert.equal(marked[0].getAttribute('aria-current'), 'true')
+  assert.match(marked[0].textContent, /Model a/)
+})
+
+test('focus-visible rings cover both the model row and the favourite star', () => {
+  assert.match(pickerCss, /\.dsh003-picker-model-item:has\(>\s*\.dsh003-picker-model-row:focus-visible\)\s*\{[^}]*box-shadow:\s*inset 0 0 0 2px/)
+  assert.match(pickerCss, /\.dsh003-picker-model-row:focus-visible\s*\{[^}]*outline:\s*none/)
+  // 星标焦点环不限于未收藏态；收藏态 focus-visible 同样保留。
+  assert.match(pickerCss, /\.dsh003-picker-row-star:focus-visible\s*\{[^}]*box-shadow:\s*inset 0 0 0 2px/)
+  assert.doesNotMatch(pickerCss, /\.dsh003-picker-row-star:not\(\[data-fav="true"\]\):focus-visible\s*\{[^}]*box-shadow/)
+})
+
+test('reduced motion removes picker transitions and animations at ID-level specificity', () => {
+  assert.match(pickerCss, /@media \(prefers-reduced-motion:\s*reduce\)\s*\{[^}]*transition:\s*none !important;[^}]*animation:\s*none !important;/)
+  assert.match(pickerCss, /html\[data-dsh-reduce-motion\][^{]*\{[^}]*transition:\s*none !important;[^}]*animation:\s*none !important;/)
 })

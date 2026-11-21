@@ -258,8 +258,9 @@ test('compositor invariants: MenuSurface glass host keeps overflow:visible with 
 })
 
 test('row hover rule never overrides starred or directly-hovered star color', () => {
-  assert.match(pickerCss, /\.dsh003-picker-model-row:hover\s+\.dsh003-picker-row-star:not\(\[data-fav="true"\]\):not\(:hover\)/)
-  assert.doesNotMatch(pickerCss, /\.dsh003-picker-model-row:hover\s+\.dsh003-picker-row-star\s*\{/)
+  assert.match(pickerCss, /\.dsh003-picker-model-item:hover\s+\.dsh003-picker-row-star:not\(\[data-fav="true"\]\):not\(:hover\)/)
+  assert.doesNotMatch(pickerCss, /\.dsh003-picker-model-item:hover\s+\.dsh003-picker-row-star\s*\{/)
+  assert.doesNotMatch(pickerCss, /\.dsh003-picker-model-row:hover/, 'hover chrome lives on the item shell, not the inner row button')
 })
 
 test('top bar icon boxes, end-insert margin and focus pseudo-element invariants hold', () => {
@@ -271,8 +272,15 @@ test('top bar icon boxes, end-insert margin and focus pseudo-element invariants 
 
 test('active row check sits inline after model name and all four bands align on the 16px grid', async () => {
   assert.match(pickerCss, /\.dsh003-picker-topbar\s*\{[^}]*padding:\s*0\s+8px\s+0\s+6px\s*!important;/)
-  assert.match(pickerCss, /\.dsh003-picker-model-row\s*\{[^}]*padding:\s*6px\s+2px\s+6px\s+8px\s*!important;/)
-  assert.match(pickerCss, /\.dsh003-picker-model-row\[data-sub="true"\]\s*\{[^}]*padding:\s*3px\s+2px\s+3px\s+8px\s*!important;/)
+  assert.match(pickerCss, /\.dsh003-picker-model-item\s*\{[^}]*padding:\s*0\s+2px\s+0(?:\s+0)?\s*!important;/,
+    'item keeps only the 2px right edge that aligns the star; the rest of the band is clickable row padding')
+  assert.match(pickerCss, /\.dsh003-picker-model-item\s*\{[^}]*min-height:\s*36px\s*!important;/)
+  assert.match(pickerCss, /\.dsh003-picker-model-item\[data-sub="true"\]\s*\{[^}]*min-height:\s*36px\s*!important;/)
+  assert.doesNotMatch(pickerCss, /\.dsh003-picker-model-item\[data-sub="true"\]\s*\{[^}]*padding:/)
+  assert.match(pickerCss, /\.dsh003-picker-model-row\s*\{[^}]*padding:\s*6px\s+6px\s+6px\s+8px\s*!important;/)
+  assert.match(pickerCss, /\.dsh003-picker-model-row\s*\{[^}]*align-self:\s*stretch\s*!important;/)
+  assert.match(pickerCss, /\.dsh003-picker-model-row\[data-sub="true"\]\s*\{[^}]*padding:\s*3px\s+6px\s+3px\s+8px\s*!important;/)
+  assert.match(pickerCss, /\.dsh003-picker-row-star\s*\{[^}]*margin-left:\s*0\s*!important;/)
   assert.match(pickerCss, /\.dsh003-picker-foot\s*\{[^}]*padding:\s*6px\s+16px\s*!important;/)
   assert.match(pickerCss, /\.dsh003-picker-options\s*\{[^}]*padding:\s*4px\s+8px\s*!important;/)
   assert.match(pickerCss, /\.dsh003-picker-model-name\s*\{[^}]*flex:\s*0\s+1\s+auto\s*!important;/)
@@ -281,14 +289,16 @@ test('active row check sits inline after model name and all four bands align on 
 
   await action(() => root.render(React.createElement(plugin.ModelPickerButton, { directory: fixture() })))
   await action(() => query('.dsh003-picker-btn').click())
-  const activeRow = query('.dsh003-picker-model-row[data-active="true"]')
-  assert.ok(activeRow)
-  const title = activeRow.querySelector('.dsh003-picker-model-title')
+  const activeItem = query('.dsh003-picker-model-item[data-active="true"]')
+  assert.ok(activeItem)
+  const row = activeItem.querySelector('.dsh003-picker-model-row')
+  const title = row?.querySelector('.dsh003-picker-model-title')
   const name = title?.querySelector('.dsh003-picker-model-name')
   const check = title?.querySelector('.dsh003-picker-row-check')
-  const star = activeRow.querySelector('.dsh003-picker-row-star')
-  assert.ok(title && name && check && star, 'check renders inside .dsh003-picker-model-title alongside model name')
+  const star = activeItem.querySelector('.dsh003-picker-row-star')
+  assert.ok(row && title && name && check && star, 'check renders inside .dsh003-picker-model-title alongside model name')
   assert.equal(title.contains(star), false, 'star stays outside title block at row trailing edge')
+  assert.equal(row.contains(star), false, 'star is a sibling button after the row, never nested inside it')
 })
 
 test('effort slider uses seamless capsule fill enclosing circular knob with distinct dark-mode contrast', async () => {

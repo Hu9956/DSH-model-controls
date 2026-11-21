@@ -710,40 +710,67 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   box-shadow: 0 0 0 2px var(--dsw-alias-border-l3) !important;
 }
 
-/* ⑤ 模型行（外层 16px - 8px padding = 8px 同心圆角；左侧 8+8=16px 对齐全局 16px 基线；右侧 2px 抵消 24px 星标盒内留白，使星标中心 22px 与顶栏 🔍 严格同轴） */
-.dsh003-picker-model-row {
+/* ⑤ 模型行（item 外壳只留圆角与底色：外层 16px - 8px padding = 8px 同心圆角；
+   内边距全数交给行按钮，整行除星标与右缘 2px 外都可点击；
+   右侧 2px 抵消 24px 星标盒内留白，使星标中心 22px 与顶栏 🔍 严格同轴。
+   行按钮与星标按钮平级并列——星标不再是按钮内的嵌套可交互元素，hover/active 底色由外壳整行铺满） */
+.dsh003-picker-model-item {
   display: flex !important;
   align-items: center !important;
   width: 100% !important;
-  padding: 6px 2px 6px 8px !important;
+  padding: 0 2px 0 0 !important;
+  /* 星标已迁为兄弟按钮，不再替行撑高：36 = 星标 24 + 原行内边距 12，节距与旧结构一致 */
+  min-height: 36px !important;
   border: none !important;
   border-radius: var(--dsw-radius-sm, 8px) !important;
   corner-shape: var(--dsh-corner-shape, var(--dsw-corner-shape, round)) !important;
   background: transparent !important;
-  cursor: pointer !important;
   box-sizing: border-box !important;
-  text-align: left !important;
   transition: background 120ms ease !important;
 }
 @media (hover: hover) {
-  .dsh003-picker-model-row:hover {
+  .dsh003-picker-model-item:hover {
     background: var(--dsw-alias-interactive-bg-hover) !important;
   }
 }
-.dsh003-picker-model-row:focus-visible {
+/* 行按钮获焦：环描在外壳上（2px 内阴影随外壳圆角），底色与悬停一致 */
+.dsh003-picker-model-item:has(> .dsh003-picker-model-row:focus-visible) {
+  background: var(--dsw-alias-interactive-bg-hover) !important;
+  box-shadow: inset 0 0 0 2px var(--dsh-focus-ring-color, var(--dsw-alias-border-l3)) !important;
+}
+.dsh003-picker-model-item[data-active="true"] {
   background: var(--dsw-alias-interactive-bg-hover) !important;
 }
-.dsh003-picker-model-row[data-active="true"] {
-  background: var(--dsw-alias-interactive-bg-hover) !important;
-}
-/* 收藏视图两行制（M-054）：名 13px/1.3 + gap 1px + 副行 10px/1.2 收进 36px——行高由星标 24px 决定（与左栏按钮等高），内边距 6→3 让位 */
-.dsh003-picker-model-row[data-sub="true"] {
-  padding: 3px 2px 3px 8px !important;
+/* 收藏视图两行制（M-054）：名 13px/1.3 + gap 1px + 副行 10px/1.2 收进 36px——行高不变，行按钮内边距 6→3 让位 */
+.dsh003-picker-model-item[data-sub="true"] {
   /* 内容 35.9px 补齐整 36——收藏视图节距 40 与普通视图/供应商列严格一致（M-054 R1） */
   min-height: 36px !important;
 }
-.dsh003-picker-model-row[data-sub="true"] .dsh003-picker-model-name {
+.dsh003-picker-model-item[data-sub="true"] .dsh003-picker-model-name {
   line-height: 1.3 !important;
+}
+/* 行按钮本体：透明裸按钮，stretch 补满外壳整高，内边距承接原行盒——
+   左 8px 叠列表 8px 落在 16px 基线；右 6px 把原星标 margin 缺口并进按钮，化为可点击区 */
+.dsh003-picker-model-row {
+  appearance: none !important;
+  display: flex !important;
+  align-items: center !important;
+  flex: 1 !important;
+  align-self: stretch !important;
+  min-width: 0 !important;
+  padding: 6px 6px 6px 8px !important;
+  border: none !important;
+  background: transparent !important;
+  color: inherit !important;
+  font: inherit !important;
+  cursor: pointer !important;
+  text-align: left !important;
+}
+.dsh003-picker-model-row[data-sub="true"] {
+  padding: 3px 6px 3px 8px !important;
+}
+.dsh003-picker-model-row:focus-visible {
+  outline: none !important;
 }
 .dsh003-picker-model-text {
   flex: 1 !important;
@@ -788,8 +815,10 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   justify-content: center !important;
   width: 24px !important;
   height: 24px !important;
-  margin-left: 6px !important;
+  /* 与行按钮的 6px 右内边距配对，星标中心仍落在原 22px 轴线上 */
+  margin-left: 0 !important;
   flex: none !important;
+  padding: 0 !important;
   border: none !important;
   border-radius: var(--dsw-radius-sm, 8px) !important;
   corner-shape: var(--dsh-corner-shape, var(--dsw-corner-shape, round)) !important;
@@ -800,12 +829,17 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   opacity: 0.68 !important;
   transition: color 120ms ease, opacity 120ms ease !important;
 }
+/* 收藏与否均有焦点环；内阴影随星标自身 8px 圆角 */
+.dsh003-picker-row-star:focus-visible {
+  outline: none !important;
+  box-shadow: inset 0 0 0 2px var(--dsh-focus-ring-color, var(--dsw-alias-border-l3)) !important;
+}
 .dsh003-picker-row-star:not([data-fav="true"]):focus-visible {
   opacity: 1 !important;
   color: var(--dsw-alias-label-secondary) !important;
 }
 @media (hover: hover) {
-  .dsh003-picker-model-row:hover .dsh003-picker-row-star:not([data-fav="true"]):not(:hover) {
+  .dsh003-picker-model-item:hover .dsh003-picker-row-star:not([data-fav="true"]):not(:hover) {
     opacity: 1 !important;
     color: var(--dsw-alias-label-secondary) !important;
   }
@@ -1031,5 +1065,23 @@ body[data-ds-dark-theme] .dsh003-picker-knob {
 }
 .dsh003-settings-row > .dsh-card-action {
   padding-top: 2px !important;
+}
+
+/* 减弱动效：宿主全局 * 降级拼不过本插件的类级 !important 过渡；
+   :is() 里永不命中的 #dsh003-reduce-motion 专用于把特异性抬到 ID 级，
+   使 transition:none 能盖过 .dsh003-picker-slider[data-dragging] .dsh003-picker-knob 之类的复合规则。 */
+@media (prefers-reduced-motion: reduce) {
+  :is(#dsh003-reduce-motion, [class*="dsh003-picker"]),
+  :is(#dsh003-reduce-motion, [class*="dsh003-picker"])::before,
+  :is(#dsh003-reduce-motion, [class*="dsh003-picker"])::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+html[data-dsh-reduce-motion] :is(#dsh003-reduce-motion, [class*="dsh003-picker"]),
+html[data-dsh-reduce-motion] :is(#dsh003-reduce-motion, [class*="dsh003-picker"])::before,
+html[data-dsh-reduce-motion] :is(#dsh003-reduce-motion, [class*="dsh003-picker"])::after {
+  transition: none !important;
+  animation: none !important;
 }
 `
