@@ -1673,10 +1673,12 @@ test('searching reaches every provider: the current tab first, then the rest wit
   // 搜供应商的名字：列出它的全部模型。
   await type('devin')
   assert.deepEqual(outline(), ['# 其它供应商 (other)', 'Claude | T3 · Devin', 'SWE | T3 · Devin'])
-  // 别处的结果照常点选，按真实的提供方 id 提交。
+  // 别处的结果照常点选，按真实的提供方 id 提交；搜索开着时分组原地冻结，不会重排也不会因为搜供应商名而变空。
   await action(() => rows()[1].click())
   assert.equal(f.calls.at(-1).provider, 't3-devin')
   assert.equal(f.calls.at(-1).model, 's')
+  assert.deepEqual(outline(), ['# 其它供应商 (other)', 'Claude | T3 · Devin', 'SWE | T3 · Devin'])
+  assert.equal(rows()[1].dataset.active, 'true')
   // 哪里都没有才显示「没有匹配」。
   if (query('[role="dialog"]') === null) await open()
   if (query('.dsh003-picker-search') === null) await action(() => query('.dsh003-picker-search-toggle').click())
@@ -1687,6 +1689,63 @@ test('searching reaches every provider: the current tab first, then the rest wit
   })
   assert.equal(query('.dsh003-picker-empty').textContent, '没有匹配的模型。')
   assert.equal(query('.dsh003-picker-group'), null)
+})
+
+test('picking from another provider during search freezes the list and switches tabs only after closing search', async () => {
+  const f = fixture()
+  f.publish({ current: { provider: 'magpie', model: 'a' }, groups: [
+    { id: 'magpie', name: 'Magpie', models: [{ id: 'a', name: 'Flash A · Trae' }] },
+    { id: 'magpie-responses', name: 'Magpie · Responses', models: [{ id: 'b', name: 'Flash B · Codex' }] },
+    {
+      id: 'freeze-other',
+      name: 'Other Cloud',
+      models: [{
+        id: 'f',
+        name: 'Flash D',
+        reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'high' },
+      }],
+    },
+  ] })
+  await render(f.directory); await open()
+  const outline = () => queryAll('.dsh003-picker-group, .dsh003-picker-model-item').map(node =>
+    node.classList.contains('dsh003-picker-group')
+      ? `# ${node.textContent}${node.dataset.section === 'other' ? ' (other)' : ''}`
+      : `${node.querySelector('.dsh003-picker-model-name').textContent} | ${node.querySelector('.dsh003-picker-model-sub')?.textContent ?? ''}`)
+  const type = async text => {
+    const input = query('.dsh003-picker-search')
+    await action(() => {
+      Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set.call(input, text)
+      input.dispatchEvent(new win.Event('input', { bubbles: true }))
+    })
+  }
+  await action(() => query('.dsh003-picker-search-toggle').click())
+  await type('flash')
+  const before = [
+    '# Chat', 'Flash A | Magpie · Trae',
+    '# Responses', 'Flash B | Magpie · Codex',
+    '# 其它供应商 (other)', 'Flash D | Other Cloud',
+  ]
+  assert.deepEqual(outline(), before)
+  // 点选「其它供应商」里的模型：原地打勾并更新底部思考深度，上下两段不重排。
+  await action(() => rows()[2].click())
+  assert.deepEqual(outline(), before)
+  assert.equal(rows()[2].dataset.active, 'true')
+  assert.equal(query('.dsh003-picker-effort-val').textContent, '高')
+  // 退出搜索后，顶栏再切到刚选的新供应商。
+  await action(() => query('.dsh003-picker-search-close').click())
+  assert.equal(query('[data-provider-id="freeze-other"]').dataset.active, 'true')
+  assert.deepEqual(outline(), ['Flash D | '])
+  // 在当前供应商里直接搜它自己的供应商名，也能命中（不会掉成空列表）。
+  await action(() => query('.dsh003-picker-search-toggle').click())
+  await type('other cloud')
+  assert.deepEqual(outline(), ['Flash D | '])
+  // 退出搜索回到正常视图；切到 Magpie 只看不选，开搜再关掉应停在 Magpie。
+  await action(() => query('.dsh003-picker-search-close').click())
+  await action(() => query('[data-provider-id="magpie"]').click())
+  await action(() => query('.dsh003-picker-search-toggle').click())
+  await type('flash')
+  await key(query('.dsh003-picker-search'), 'Escape')
+  assert.equal(query('[data-provider-id="magpie"]').dataset.active, 'true')
 })
 
 test('searching inside favourites lists the favourites first, then every other model', async () => {
@@ -1706,8 +1765,12 @@ test('searching inside favourites lists the favourites first, then every other m
   })
   const names = queryAll('.dsh003-picker-group, .dsh003-picker-model-name').map(node => node.textContent)
   assert.deepEqual(names, ['Mono X', '其它模型', 'Mono Y', 'Mono Z'])
-  // 还原共享状态：取消收藏、回到供应商视图。
+  // 点选「其它模型」：搜索态不跳，退出搜索仍留在收藏夹视图。
+  await action(() => rows()[2].click())
+  assert.equal(rows()[2].dataset.active, 'true')
   await action(() => query('.dsh003-picker-search-close').click())
+  assert.equal(query('.dsh003-picker-prov-fav').dataset.active, 'true')
+  // 还原共享状态：取消收藏、回到供应商视图。
   await action(() => query('.dsh003-picker-row-star').click())
   await action(() => query('[data-provider-id="fav-a"]').click())
 })

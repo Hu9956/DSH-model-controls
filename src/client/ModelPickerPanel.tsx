@@ -183,12 +183,23 @@ export function ModelPickerPanel(props: {
 
   const openSearch = (initialQuery?: string): void => {
     providerSort.cancel()
+    deferredFollowRef.current = false
     if (initialQuery !== undefined) setQuery(initialQuery)
     setSearchExpanded(true)
   }
 
   const closeSearch = (focusTarget: 'panel' | 'toggle' = 'toggle'): void => {
     restoreFocusRef.current = focusTarget
+    const selectionChanged = observedSelection.current.provider !== current?.provider
+      || observedSelection.current.model !== current?.model
+    if (selectionChanged || deferredFollowRef.current) {
+      deferredFollowRef.current = false
+      observedSelection.current = { provider: current?.provider, model: current?.model }
+      if (current?.provider && providers.some(p => p.id === current.provider)) {
+        rememberedProviderId = current.provider
+        setActiveProviderId(current.provider)
+      }
+    }
     setQuery('')
     setSearchExpanded(false)
   }
@@ -260,18 +271,31 @@ export function ModelPickerPanel(props: {
     return providerSort.sorted[0]?.id ?? ''
   })
 
-  const observedProvider = React.useRef(current?.provider)
-  // 跟随实际模型切换；目录刷新保留正在浏览的供应商，失效后才回退。
+  const observedSelection = React.useRef({ provider: current?.provider, model: current?.model })
+  const deferredFollowRef = React.useRef(false)
+  // 跟随实际模型切换；搜索展开期间冻结当前分组不重排，退出搜索后再切过去；
+  // 目录刷新保留正在浏览的供应商，失效后才回退。
   React.useEffect(() => {
-    const changed = observedProvider.current !== current?.provider
-    observedProvider.current = current?.provider
+    const selectionChanged = observedSelection.current.provider !== current?.provider
+      || observedSelection.current.model !== current?.model
+    observedSelection.current = { provider: current?.provider, model: current?.model }
     const currentId = providers.some(p => p.id === current?.provider) ? current?.provider : undefined
+    if (searchExpanded) {
+      if (selectionChanged) deferredFollowRef.current = true
+      setActiveProviderId(active => {
+        if (providers.some(p => p.id === active)) return active
+        return currentId ?? providerSort.sorted[0]?.id ?? ''
+      })
+      return
+    }
+    const shouldFollow = selectionChanged || deferredFollowRef.current
+    deferredFollowRef.current = false
     setActiveProviderId(active => {
-      if (changed && currentId) return currentId
+      if (shouldFollow && currentId) return currentId
       if (providers.some(p => p.id === active)) return active
       return currentId ?? providerSort.sorted[0]?.id ?? ''
     })
-  }, [current?.provider, providers, providerSort.sorted])
+  }, [current?.provider, current?.model, providers, providerSort.sorted, searchExpanded])
 
   // 视口自动滚动至当前激活模型与当前激活供应商 Tab
   const activeRowRef = React.useRef<HTMLButtonElement | null>(null)
@@ -496,8 +520,8 @@ export function ModelPickerPanel(props: {
   const visibleRows = React.useMemo(() => {
     const matches = (text: string): boolean => text.toLocaleLowerCase().includes(normalized)
     return normalized === '' ? sourceRows : sourceRows.filter(row =>
-      matches(row.modelName) || matches(row.modelId) || (favView && matches(row.providerName)))
-  }, [sourceRows, normalized, favView])
+      matches(row.modelName) || matches(row.modelId) || matches(row.providerName))
+  }, [sourceRows, normalized])
   const emptyText = catalogStatus === 'loading' ? t('loadingCatalog')
     : catalogStatus === 'error' ? t('loadFailed')
     : normalized !== '' ? t('emptyNoMatch')
