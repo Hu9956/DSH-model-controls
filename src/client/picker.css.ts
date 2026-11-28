@@ -427,7 +427,7 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   position: absolute !important;
   left: 7px !important;
   right: 7px !important;
-  bottom: 0 !important;
+  bottom: 4px !important;
   height: 2px !important;
   border-radius: 999px !important;
   corner-shape: round !important;
@@ -440,7 +440,7 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
 .dsh003-picker-prov-ind {
   position: absolute !important;
   left: 0 !important;
-  bottom: 0 !important;
+  bottom: 4px !important;
   height: 2px !important;
   background: transparent !important;
   pointer-events: none !important;
@@ -563,6 +563,9 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   height: 18px !important;
   flex: none !important;
   pointer-events: none !important;
+}
+.dsh003-picker-prov .dsh003-provider-mark {
+  transform: translateX(-1.5px) !important;
 }
 .dsh003-provider-mark > .dsh003-provider-logo,
 .dsh003-provider-mark > .dsh003-provider-initial {

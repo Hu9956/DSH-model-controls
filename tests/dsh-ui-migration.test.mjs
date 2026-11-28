@@ -320,6 +320,11 @@ test('effort slider uses seamless capsule fill enclosing circular knob with dist
 
 test('provider topbar mounts @kewen/dsh-ui sliding rounded underline indicator', async () => {
   assert.match(pickerCss, /\.dsh003-picker-prov-list\s*\{[^}]*position:\s*relative\s*!important;/)
+  assert.match(pickerCss, /\.dsh003-picker-prov-ind\s*\{[^}]*bottom:\s*4px\s*!important;/, 'indicator floats 4px above the topbar divider')
+  assert.match(pickerCss, /\.dsh003-picker-prov\[data-active="true"\]::after\s*\{[^}]*bottom:\s*4px\s*!important;/, 'static fallback matches the floating indicator')
+  assert.match(pickerCss, /\.dsh003-provider-badge\s*\{[^}]*right:\s*-3px\s*!important;/)
+  assert.match(pickerCss, /\.dsh003-picker-prov\s+\.dsh003-provider-mark\s*\{[^}]*transform:\s*translateX\(-1\.5px\)\s*!important;/,
+    'badged mark shifts left by half the 3px badge overhang so mark + badge centre on the indicator')
   assert.match(pickerCss, /\.dsh003-picker-prov-ind::after\s*\{[^}]*border-radius:\s*999px\s*!important;[^}]*corner-shape:\s*round\s*!important;/)
   assert.match(pickerCss, /\.dsh003-picker-prov-list\[data-ind\]\s+\.dsh003-picker-prov\[data-active="true"\]::after\s*\{\s*display:\s*none\s*!important;\s*\}/)
 
