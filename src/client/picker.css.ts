@@ -553,8 +553,9 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   font-weight: 700 !important;
   line-height: 1 !important;
 }
-/* 协议角标：同网关按协议拆出的路由图标相同，右下角 11px 实心圆 + 镂空字母（R / A）区分。
-   图标在角标处挖圆缺口，两者之间留出底色缝隙，不糊在一起。
+/* CLI 角标：T3 桥接器的各个 CLI 共用 T3 字标，右下角叠一枚 11px 的 CLI 图标区分。
+   字标在角标处挖圆缺口：圆心对准角标中心（15.5, 15.5），四周留白一致（约 1.3px），
+   「3」左下的尾巴整段落在缺口内，不留碎片。三格缺口相同，只有角标不同。
    全部继承文本色（tertiary → hover/active primary），明暗主题与选中态零特判。 */
 .dsh003-provider-mark {
   position: relative !important;
@@ -564,15 +565,15 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   flex: none !important;
   pointer-events: none !important;
 }
+/* 角标伸出图标框 3px，「图标 + 角标」的可见外形右偏 1.5px；整体左移抵掉，与选中滑块居中对齐 */
 .dsh003-picker-prov .dsh003-provider-mark {
   transform: translateX(-1.5px) !important;
 }
-.dsh003-provider-mark > .dsh003-provider-logo,
-.dsh003-provider-mark > .dsh003-provider-initial {
+.dsh003-provider-mark > .dsh003-provider-logo {
   width: 100% !important;
   height: 100% !important;
-  -webkit-mask: radial-gradient(circle at 16px 16px, transparent 6.8px, #000 7.3px) !important;
-  mask: radial-gradient(circle at 16px 16px, transparent 6.8px, #000 7.3px) !important;
+  -webkit-mask: radial-gradient(circle at 15.5px 15.5px, transparent 6.6px, #000 7px) !important;
+  mask: radial-gradient(circle at 15.5px 15.5px, transparent 6.6px, #000 7px) !important;
 }
 .dsh003-provider-badge {
   position: absolute !important;
@@ -581,6 +582,11 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   width: 11px !important;
   height: 11px !important;
   display: block !important;
+}
+.dsh003-provider-badge svg {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
 }
 /* 触发按钮首字兜底微型徽标：16px 微圆角卡片，中英文字号 11px 清晰不缩水 */
 .dsh003-provider-initial--sm {
@@ -711,6 +717,32 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
 .dsh003-picker-retry:focus-visible {
   outline: none !important;
   box-shadow: 0 0 0 2px var(--dsw-alias-border-l3) !important;
+}
+
+/* 渠道小标题：并格入口（如 Magpie 的三个协议）在列表里按渠道分组，每组前一行。
+   字号 / 字重 / 颜色 / 26px 高 / 8px 左右内边距同 @kewen/dsh-ui 的分组标题 .dsh-pop-ghead；
+   左 8px 叠列表 8px 落在 16px 基线，与模型名左缘对齐。 */
+.dsh003-picker-group {
+  flex: none !important;
+  display: flex !important;
+  align-items: center !important;
+  height: 26px !important;
+  padding: 0 8px !important;
+  font-size: var(--dsh-text-sm, 12px) !important;
+  font-weight: 500 !important;
+  color: var(--dsw-alias-label-secondary) !important;
+  box-sizing: border-box !important;
+}
+.dsh003-picker-group:not(:first-child) {
+  margin-top: 6px !important;
+}
+/* 搜索结果里「其它供应商」这一段：上方一条分隔线，免得被当成当前入口的又一条渠道。
+   线下 8px 留白并进标题盒（26 + 8 + 1 = 35px）；排在最前（当前入口没有匹配）时不画线。 */
+.dsh003-picker-group[data-section="other"]:not(:first-child) {
+  height: 35px !important;
+  margin-top: 8px !important;
+  padding-top: 8px !important;
+  border-top: 1px solid var(--dsw-alias-border-l1) !important;
 }
 
 /* ⑤ 模型行（item 外壳只留圆角与底色：外层 16px - 8px padding = 8px 同心圆角；

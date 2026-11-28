@@ -12,12 +12,16 @@
  * R7（2026-09-06）：qwen 换千问独立品牌新标（qianwenai.com 控制台品牌 SVG，7 瓣渐变花标转 6 条去重 currentColor path，viewBox 原文保留）；旧 Simple Icons「QWen」结标为弃用的旧通义标。
  * M-056 R1（2026-09-06）：23 枚 viewBox 归一化——getBBox 实测各枚绘制包围盒（剔除 mask/defs，openrouter 的 scale(0.0234375) 已折算）后逐枚改写 viewBox，path 数据仍为快照原文逐字节；各素材留白不一导致的同盒视觉尺寸不一（deepseek 高向仅 59% vs qwen 100%）就此消除，面板 20px 与触发按钮 14px 通用。
  * M-105（2026-09-14）：xiaomi / zai 纠错换官方标——models.dev logos 对小众 id 放占位/错标（实测 xiaomi.svg 装 NVIDIA 路径、zai.svg 装 Baseten 路径）：xiaomi 换 Simple Icons 官方「Xiaomi」；zai 换 z.ai 官网 logo.svg 品牌组合（圆角方块 + 镂空 Z，合并单 path evenodd 负形）。错标遇到一个换一个。
+ * T3 桥接器（2026-11-28）：`t3-*` 路由画作「T3 字标 + CLI 图标角标」。字标取自 T3 Code 源码
+ *   apps/web/src/components/T3Wordmark.tsx 的原 path 与 viewBox；Devin 取自 ACP registry 的 devin.svg（原件即 currentColor）；
+ *   Codex 复用本文件的 openai；Antigravity 在 T3 Code 里只有一张 128px 彩色 PNG，按其透明通道描出单色外形
+ *   （与原图重合度 98.7%）。版权归各品牌，仅作本仓 UI 标识。
  * dangerouslySetInnerHTML 注入的是本文件构建期常量（快照 SVG 原文），无任何运行期/用户输入拼入。
  */
 import * as React from 'react'
 import magpieSvg from './magpie.svg?raw'
 import { isMagpieRoute } from './magpie-display'
-import type { ProtocolBadge } from './protocol-badge'
+import { isT3Route, t3CliOf, type T3Cli } from './t3-display'
 
 /** 首字母兜底：无 logo 的 provider 渲染展示名首个可见字符（自 ModelPickerPanel 迁入）。 */
 function providerInitial(name: string): string {
@@ -198,55 +202,60 @@ export function resolveProviderLogo(providerId: string | null | undefined): stri
 }
 
 /**
- * 图标身份：两个提供方的键相同，左栏就画出一模一样的图标。
- * 与 ProviderLogo 的取图顺序一致（Magpie 路由 → 内置 logo → 首字母）。
+ * 图标身份：两个提供方的键相同，顶栏就画出一模一样的图标，并成同一格（见 provider-family.ts）。
+ * 与 ProviderLogo 的取图顺序一致（Magpie 路由 → T3 桥接 → 内置 logo → 首字母）。
  * @param providerId - 取图用的 id（显示身份覆盖后的值）。
  * @param name - 首字母兜底用的显示名。
  */
 export function providerIconKey(providerId: string, name: string): string {
   if (isMagpieRoute(providerId)) return 'magpie'
+  // 桥接器的每个 CLI 各画各的角标，图标身份互不相同。
+  if (isT3Route(providerId)) return `t3:${providerId.trim().toLowerCase()}`
   const id = providerId.trim().toLowerCase()
   const key = id === '' ? null : resolveProviderLogoKey(id)
   return key === null ? `initial:${providerInitial(name)}` : key
 }
 
-/** 协议角标的字形：12×12 网格里的描边路径，在实心圆上挖空，任何底色上都是镂空字母。
- * 用路径而非文字：不依赖字体，各平台字重、基线一致。 */
-const BADGE_GLYPHS: Readonly<Record<ProtocolBadge, string>> = {
-  R: 'M4.1 9V3H6.2A1.75 1.75 0 0 1 6.2 6.5H4.1M6 6.5L7.9 9',
-  A: 'M3.7 9L6 3L8.3 9M4.5 7.2H7.5',
+/** T3 字标（T3 Code 源码 T3Wordmark.tsx 原 path 与 viewBox）。 */
+const T3_WORDMARK = `<svg viewBox="15.5309 37 94.3941 56.96" xmlns="http://www.w3.org/2000/svg"><path d="M33.4509 93V47.56H15.5309V37H64.3309V47.56H46.4109V93H33.4509ZM86.7253 93.96C82.832 93.96 78.9653 93.4533 75.1253 92.44C71.2853 91.3733 68.032 89.88 65.3653 87.96L70.4053 78.04C72.5386 79.5867 75.0186 80.8133 77.8453 81.72C80.672 82.6267 83.5253 83.08 86.4053 83.08C89.6586 83.08 92.2186 82.44 94.0853 81.16C95.952 79.88 96.8853 78.12 96.8853 75.88C96.8853 73.7467 96.0586 72.0667 94.4053 70.84C92.752 69.6133 90.0853 69 86.4053 69H80.4853V60.44L96.0853 42.76L97.5253 47.4H68.1653V37H107.365V45.4L91.8453 63.08L85.2853 59.32H89.0453C95.9253 59.32 101.125 60.8667 104.645 63.96C108.165 67.0533 109.925 71.0267 109.925 75.88C109.925 79.0267 109.099 81.9867 107.445 84.76C105.792 87.48 103.259 89.6933 99.8453 91.4C96.432 93.1067 92.0586 93.96 86.7253 93.96Z" fill="currentColor"/></svg>`
+
+/** T3 桥接的 CLI → 角标图标；Codex 复用上面的 openai。 */
+const T3_CLI_LOGOS: Readonly<Record<Exclude<T3Cli, 'codex'>, string>> = {
+  antigravity:
+    `<svg viewBox="0 5.2 128 117.8" xmlns="http://www.w3.org/2000/svg"><path d="M59.1 6.2Q63.2 5.2 66.7 5.7Q70.1 6.1 73.4 7.7Q76.8 9.2 79.8 12.3Q82.9 15.4 84.8 18.3Q86.8 21.2 90.2 29.8Q93.8 38.4 98.8 56.6Q103.9 74.8 107 83.2Q110.1 91.6 113.6 98.1Q117.1 104.6 122.5 111.2Q127.9 117.9 127.9 119.2Q127.9 120.6 127.2 121.3Q126.4 122.1 125.6 122.5Q124.8 122.9 123.7 122.9Q122.6 122.9 120.2 122.2Q117.9 121.6 114.2 119.1Q110.6 116.6 108.4 114.5Q106.2 112.4 102.8 108.1Q99.2 103.8 94.1 95.1Q88.9 86.4 85.6 81.8Q82.2 77.1 79.4 74.6Q76.6 72.1 74.7 71.1Q72.8 70.1 68.8 69.4Q64.9 68.8 60.2 69.4Q55.6 70.1 53.1 71.5Q50.6 72.9 48.2 75.1Q45.9 77.2 43 81.2Q40.1 85.2 36.8 91Q33.6 96.8 30.7 101.1Q27.8 105.4 24.8 109Q21.8 112.6 19.4 114.8Q17.1 116.9 13.8 119.2Q10.6 121.6 8.9 122.2Q7.2 122.8 5 122.8Q2.8 122.8 1.4 121.7Q0.1 120.6 0.1 119.5Q0.1 118.4 5.6 111.4Q11.1 104.4 14.6 97.8Q18.1 91.2 21.5 81.7Q24.9 72.1 30.1 54Q35.2 35.9 38.3 28.7Q41.4 21.4 43.8 17.8Q46.2 14.2 48.3 12.2Q50.4 10.1 52.7 8.7Q54.9 7.2 59.1 6.2Z" fill="currentColor"/></svg>`,
+  devin:
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 263 300"><path fill="currentColor" d="M1.84577e-10 100.797V38.6224C1.88813e-05 35.8899 1.45777 33.365 3.82414 31.9988L57.6539 0.920185C60.0203 -0.446051 62.9358 -0.446051 65.3022 0.920185L119.132 31.9988C121.498 33.3651 122.956 35.8899 122.956 38.6224V70.375C123.192 80.9262 128.769 91.103 138.577 96.7655C148.384 102.428 159.986 102.169 169.242 97.0979L196.74 81.2217C199.107 79.8554 202.022 79.8554 204.388 81.2217L258.218 112.3C260.585 113.667 262.042 116.191 262.042 118.924V181.081C262.042 183.814 260.585 186.339 258.218 187.705L204.388 218.783C202.022 220.15 199.107 220.15 196.74 218.783L169.464 203.036C160.173 197.847 148.465 197.536 138.579 203.244C128.772 208.906 123.195 219.083 122.959 229.634V261.378C122.959 264.111 121.501 266.635 119.135 268.002L65.3048 299.08C62.9384 300.447 60.0229 300.447 57.6566 299.08L3.82673 268.002C1.46036 266.635 0.00260562 264.111 0.00260562 261.378V199.221C0.0026245 196.488 1.46038 193.963 3.82675 192.597L57.6565 161.519C60.0229 160.152 62.9384 160.152 65.3048 161.519L92.8656 177.431C102.11 182.467 113.679 182.711 123.463 177.062C133.349 171.355 138.934 161.06 139.086 150.419C138.85 139.868 133.274 128.601 123.466 122.938C113.658 117.276 102.056 117.534 92.8007 122.606L65.1758 138.645C62.7991 140.025 59.8649 140.024 57.4894 138.642L3.80216 107.407C1.44816 106.038 -1.88809e-05 103.52 1.84577e-10 100.797Z"/></svg>`,
 }
 
-/** 右下角协议角标：实心圆 + 镂空字母，颜色继承文本色。mask id 每个实例唯一。 */
-function ProtocolBadgeMark(props: { badge: ProtocolBadge }): React.ReactNode {
-  const maskId = `dsh003-badge-${React.useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
+/** CLI 角标的 SVG。 */
+function t3CliLogo(cli: T3Cli): string {
+  return cli === 'codex' ? PROVIDER_LOGOS.get('openai') ?? '' : T3_CLI_LOGOS[cli]
+}
+
+/** T3 桥接器路由的图标：T3 字标；面板顶栏里右下角再叠一枚 CLI 图标角标，字标在角标处挖出圆形缺口。
+ * 触发按钮的 16px 小档只画字标（角标会小到看不清，旁边已有模型名）；后缀未收录的 CLI 也只画字标。 */
+function T3Logo(props: { providerId: string; small: boolean }): React.ReactNode {
+  const cli = props.small ? undefined : t3CliOf(props.providerId)
+  const cls = props.small ? 'dsh003-provider-logo dsh003-provider-logo--sm' : 'dsh003-provider-logo'
+  const wordmark = <span className={cls} aria-hidden="true" dangerouslySetInnerHTML={{ __html: T3_WORDMARK }} />
+  if (cli === undefined) return wordmark
   return (
-    <svg className="dsh003-provider-badge" viewBox="0 0 12 12" aria-hidden="true">
-      <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width="12" height="12">
-        <rect width="12" height="12" fill="#fff" />
-        <path d={BADGE_GLYPHS[props.badge]} fill="none" stroke="#000" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-      </mask>
-      <circle cx="6" cy="6" r="6" fill="currentColor" mask={`url(#${maskId})`} />
-    </svg>
+    <span className="dsh003-provider-mark" data-cli-badge={cli} aria-hidden="true">
+      {wordmark}
+      <span className="dsh003-provider-badge" aria-hidden="true" dangerouslySetInnerHTML={{ __html: t3CliLogo(cli) }} />
+    </span>
   )
 }
 
-/** 左栏/触发按钮提供方 logo：命中渲染内联 SVG（aria-hidden，色彩继承文本色），未命中回退首字母文本。
- * M-056：small=true 为触发按钮 16px 小档，logo 与首字母回退同用 `--sm` 盒。
- * badge：同一网关按协议拆出的路由在左栏图标相同，右下角加协议字母区分（仅左栏使用）。 */
-export function ProviderLogo(props: { providerId: string; name: string; small?: boolean; badge?: ProtocolBadge }): React.ReactNode {
+/** 顶栏/触发按钮提供方 logo：命中渲染内联 SVG（aria-hidden，色彩继承文本色），未命中回退首字母文本。
+ * M-056：small=true 为触发按钮 16px 小档，logo 与首字母回退同用 `--sm` 盒。 */
+export function ProviderLogo(props: { providerId: string; name: string; small?: boolean }): React.ReactNode {
   const small = props.small === true
+  if (isT3Route(props.providerId)) return <T3Logo providerId={props.providerId} small={small} />
   const cls = small ? 'dsh003-provider-logo dsh003-provider-logo--sm' : 'dsh003-provider-logo'
   const svg = isMagpieRoute(props.providerId) ? magpieSvg : resolveProviderLogo(props.providerId)
   const initialCls = small ? 'dsh003-provider-initial dsh003-provider-initial--sm' : 'dsh003-provider-initial'
-  const art = svg !== null
+  return svg !== null
     ? <span className={cls} aria-hidden="true" dangerouslySetInnerHTML={{ __html: svg }} />
     : <span className={initialCls} aria-hidden="true">{providerInitial(props.name)}</span>
-  if (props.badge === undefined) return art
-  return (
-    <span className="dsh003-provider-mark" data-protocol-badge={props.badge} aria-hidden="true">
-      {art}
-      <ProtocolBadgeMark badge={props.badge} />
-    </span>
-  )
 }

@@ -58,14 +58,24 @@ export function rememberProviders(ids: readonly string[]): void {
   setOrder(mergeProviderOrder(snapshot, ids))
 }
 
-/** Move only visible providers; temporary failures keep their reserved positions. */
-export function moveProvider(ids: readonly string[], id: string, before: string | null): void {
+/**
+ * Move a group of visible providers together, keeping their relative order;
+ * temporary failures keep their reserved positions.
+ * 顶栏一格可能是并在一起的几个提供方（见 provider-family.ts），拖动一格要整组一起挪。
+ */
+export function moveProviders(ids: readonly string[], moving: readonly string[], before: string | null): void {
   const saved = mergeProviderOrder(snapshot, ids)
   const available = new Set(ids)
   const visible = saved.filter(value => available.has(value))
-  if (!visible.includes(id) || before === id || (before !== null && !visible.includes(before))) return
-  const next = visible.filter(value => value !== id)
-  next.splice(before === null ? next.length : next.indexOf(before), 0, id)
+  const group = visible.filter(value => moving.includes(value))
+  if (group.length === 0 || (before !== null && (group.includes(before) || !visible.includes(before)))) return
+  const next = visible.filter(value => !group.includes(value))
+  next.splice(before === null ? next.length : next.indexOf(before), 0, ...group)
   let index = 0
   saveOrder(saved.map(value => available.has(value) ? next[index++]! : value))
+}
+
+/** Move only visible providers; temporary failures keep their reserved positions. */
+export function moveProvider(ids: readonly string[], id: string, before: string | null): void {
+  moveProviders(ids, [id], before)
 }

@@ -1,12 +1,27 @@
 import * as React from 'react'
-import { getProviderOrder, moveProvider, orderedProviders, rememberProviders, subscribeProviderOrder } from './provider-order'
+import { getProviderOrder, moveProviders, orderedProviders, rememberProviders, subscribeProviderOrder } from './provider-order'
 
 interface DragPreview { id: string; before: string | null; offset: number }
 
-/** Long press owns its pointer; no catalog/model writes are involved. */
-export function useProviderSort<T extends { id: string }>(providers: readonly T[]) {
+/**
+ * Long press owns its pointer; no catalog/model writes are involved.
+ * @param groupKeyOf - 顶栏一格可以并入几个提供方：键相同的归同一格，拖动时整组一起挪。
+ *   每格以第一个成员的 id 作为 `data-provider-id`；不传则一个提供方一格。
+ */
+export function useProviderSort<T extends { id: string }>(providers: readonly T[], groupKeyOf?: (provider: T) => string) {
   const order = React.useSyncExternalStore(subscribeProviderOrder, getProviderOrder)
   const sorted = React.useMemo(() => orderedProviders(providers, order), [providers, order])
+  const groups = React.useMemo(() => {
+    const byKey = new Map<string, string[]>()
+    for (const provider of sorted) {
+      const key = groupKeyOf === undefined ? provider.id : groupKeyOf(provider)
+      const members = byKey.get(key)
+      if (members === undefined) byKey.set(key, [provider.id])
+      else members.push(provider.id)
+    }
+    return [...byKey.values()]
+  }, [sorted, groupKeyOf])
+  const groupOf = (id: string): readonly string[] => groups.find(group => group[0] === id) ?? [id]
   const idsKey = React.useMemo(() => JSON.stringify(providers.map(provider => provider.id)), [providers])
   const listRef = React.useRef<HTMLDivElement | null>(null)
   const cancelRef = React.useRef<(() => void) | null>(null)
@@ -22,7 +37,7 @@ export function useProviderSort<T extends { id: string }>(providers: readonly T[
     blockedClick.current = null
     const element = event.currentTarget
     const list = listRef.current
-    if (list === null || sorted.length < 2) return
+    if (list === null || groups.length < 2) return
     const pointerId = event.pointerId
     const originX = event.clientX, originY = event.clientY
     const origin = element.getBoundingClientRect(), originScroll = list.scrollLeft
@@ -85,7 +100,7 @@ export function useProviderSort<T extends { id: string }>(providers: readonly T[
         y = e.clientY
         update()
         blockedClick.current = id
-        moveProvider(ids, id, before)
+        moveProviders(ids, groupOf(id), before)
       }
       cleanup()
     }
@@ -133,9 +148,10 @@ export function useProviderSort<T extends { id: string }>(providers: readonly T[
     if (!event.altKey || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return
     event.preventDefault()
     cancelRef.current?.()
-    const ids = sorted.map(provider => provider.id), index = ids.indexOf(id)
-    if (event.key === 'ArrowLeft' && index > 0) moveProvider(ids, id, ids[index - 1]!)
-    if (event.key === 'ArrowRight' && index < ids.length - 1) moveProvider(ids, id, ids[index + 2] ?? null)
+    const ids = sorted.map(provider => provider.id)
+    const tabs = groups.map(group => group[0]!), index = tabs.indexOf(id)
+    if (event.key === 'ArrowLeft' && index > 0) moveProviders(ids, groupOf(id), tabs[index - 1]!)
+    if (event.key === 'ArrowRight' && index >= 0 && index < tabs.length - 1) moveProviders(ids, groupOf(id), tabs[index + 2] ?? null)
   }
   const cancel = (): void => { cancelRef.current?.() }
   return { sorted, listRef, drag, begin, cancel, suppressClick, keyboardMove }

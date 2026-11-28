@@ -92,11 +92,12 @@ export const settingsZh: Record<SettingsKey, string> = {
 
 /** Picker-panel locale keys. */
 export type PickerKey =
-  | 'searchNeutral' | 'searchFavorites' | 'searchProvider' | 'searchProviderShort'
+  | 'searchNeutral' | 'searchOtherProviders' | 'searchOtherModels'
   | 'searchToggleLabel' | 'searchCloseLabel'
   | 'dialogLabel' | 'providerRailLabel' | 'favoritesLabel' | 'favoriteAdd' | 'favoriteRemove'
   | 'manageProvidersLabel'
   | 'providerReorderHint' | 'effortLabel'
+  | 'channelChat' | 'channelAccount' | 'channelApiKey'
   | 'emptyFavorites' | 'emptyNoMatch' | 'loadingCatalog' | 'loadFailed' | 'emptyProvider' | 'emptyCatalog'
   | 'partialProviders' | 'effortUnsupported' | 'effortNoneShort' | 'effortNoneTitle' | 'retry' | 'providerLoadFailed'
   | 'modelFallback' | 'switchFailed' | 'triggerAria' | 'triggerAriaEffort'
@@ -105,9 +106,8 @@ export type PickerKey =
 /** English copy for the picker panel. */
 export const pickerEn: Record<PickerKey, string> = {
   searchNeutral: 'Search models…',
-  searchFavorites: 'Search favourites…',
-  searchProvider: 'Search {name} models…',
-  searchProviderShort: 'Search {name}…',
+  searchOtherProviders: 'Other providers',
+  searchOtherModels: 'Other models',
   searchToggleLabel: 'Search models',
   searchCloseLabel: 'Close search',
   dialogLabel: 'Choose a model',
@@ -117,6 +117,9 @@ export const pickerEn: Record<PickerKey, string> = {
   favoriteRemove: 'Remove from favourites',
   manageProvidersLabel: 'Configure models & providers',
   providerReorderHint: '{name} · hold to reorder (Alt + ←/→)',
+  channelChat: 'Chat',
+  channelAccount: 'Account sign-in',
+  channelApiKey: 'API key',
   effortLabel: 'Reasoning effort',
   emptyFavorites: 'No favourites yet. Star a model to keep it here.',
   emptyNoMatch: 'No matching models.',
@@ -149,9 +152,8 @@ export const pickerFallback: Translate<PickerKey> = (key, params) => format(pick
 /** Simplified Chinese copy for the picker panel. */
 export const pickerZh: Record<PickerKey, string> = {
   searchNeutral: '搜索模型…',
-  searchFavorites: '搜索收藏模型…',
-  searchProvider: '搜索 {name} 模型…',
-  searchProviderShort: '搜索 {name}…',
+  searchOtherProviders: '其它供应商',
+  searchOtherModels: '其它模型',
   searchToggleLabel: '搜索模型',
   searchCloseLabel: '收起搜索',
   dialogLabel: '选择模型',
@@ -161,6 +163,9 @@ export const pickerZh: Record<PickerKey, string> = {
   favoriteRemove: '取消收藏',
   manageProvidersLabel: '配置模型与提供方',
   providerReorderHint: '{name} · 长按拖动排序（Alt + ←/→）',
+  channelChat: 'Chat',
+  channelAccount: '账号登录',
+  channelApiKey: 'API 密钥',
   effortLabel: '思考深度',
   emptyFavorites: '暂无收藏；点击模型行右侧的星标即可收藏。',
   emptyNoMatch: '没有匹配的模型。',

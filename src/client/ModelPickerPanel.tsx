@@ -5,6 +5,8 @@
  * 数据来自 model-catalog.ts 真目录（providers = 会话可服务路由分组）；行单行模型名（验收反馈：不留 ID 副标题）。
  * 纯受控组件：目录快照/当前选择/收藏/回调全部由 ModelPickerButton 喂入。
  * 收藏视图：右栏跨提供方汇总收藏的模型，行两行制（模型名 + 供应商名副行，M-054，行高 36px 不变）。搜索：模型 id/名称（收藏视图含提供方名）子串过滤。
+ * 顶栏按入口归并（provider-family.ts）：画出同一品牌图标的提供方并成一格，列表里按渠道分组、每组一行小标题。
+ * 搜索跨供应商：先列当前视图里的匹配，再接一段其它供应商的匹配（副行写明入口与渠道）。
  */
 import * as React from 'react'
 import {
@@ -24,9 +26,8 @@ import { favoriteKeyOf, getFavoriteSet, subscribeFavorites, toggleFavorite } fro
 import { isMagpieRoute, magpieGatewayLabel, splitMagpieModelName } from './magpie-display'
 import { effortKeyOf } from './effort-labels'
 import { ProviderLogo, providerIconKey } from './provider-logos'
-import { protocolBadges } from './protocol-badge'
+import { channelLabels, familyKeyOf, groupFamilies } from './provider-family'
 import { displayProviderIcon, displayProviderName } from './display-identity'
-import { searchPlaceholder } from './search-placeholder'
 import { format, pickerFallback, type PickerKey, type Translate } from './locales'
 import type { CatalogGroupSnapshot } from './model-catalog'
 import { useProviderSort } from './use-provider-sort'
@@ -36,6 +37,12 @@ const fallbackTranslate = pickerFallback
 
 /** 把 v 夹在 [lo, hi]。 */
 const clamp = (v: number, lo: number, hi: number): number => Math.min(Math.max(v, lo), hi)
+
+/** 提供方的入口键：按显示身份覆盖后的图标算，画出同一品牌图标的并成顶栏一格。 */
+function providerFamilyKey(provider: CatalogGroupSnapshot): string {
+  const icon = displayProviderIcon(provider)
+  return familyKeyOf(provider.id, providerIconKey(icon.providerId, icon.name))
+}
 
 /** 空 failures 常量：`props.failures ?? []` 每次 render 新建数组会让下游比对失真。 */
 const EMPTY_FAILURES: ReadonlyArray<never> = []
@@ -141,12 +148,9 @@ export function ModelPickerPanel(props: {
   optionsSlot?: React.ReactNode
 }): React.ReactNode {
   const { providers, current, catalogStatus } = props
-  const providerSort = useProviderSort(providers)
-  // 同一网关按协议拆出的路由图标相同，给撞图标的路由补协议角标（R / A）。
-  const badges = React.useMemo(() => protocolBadges(providers.map(provider => {
-    const icon = displayProviderIcon(provider)
-    return { id: provider.id, iconKey: providerIconKey(icon.providerId, icon.name) }
-  })), [providers])
+  const providerSort = useProviderSort(providers, providerFamilyKey)
+  // 画出同一品牌图标的提供方并成顶栏一格（入口）；入口里按原提供方分渠道。
+  const families = React.useMemo(() => groupFamilies(providerSort.sorted, providerFamilyKey), [providerSort.sorted])
   const favorites = React.useSyncExternalStore(subscribeFavorites, getFavoriteSet)
   const panelRef = React.useRef<HTMLDivElement | null>(null)
   const modelListRef = React.useRef<HTMLDivElement | null>(null)
@@ -476,16 +480,19 @@ export function ModelPickerPanel(props: {
   const activeProvider = providers.find(p => p.id === activeProviderId) ?? providerSort.sorted[0]
   // 接入 @kewen/dsh-ui 滑动指示器：切换收藏/供应商 Tab 时 220ms 平滑滑动圆头底线；
   // 搜索态卸载供应商栏时传 false 回收，收起搜索重挂载后瞬时归位。
-  const activeTabKey = searchExpanded ? false : (favView ? '__fav__' : (activeProvider?.id ?? ''))
+  const activeFamily = families.find(family => family.members.some(member => member.id === activeProvider?.id)) ?? families[0]
+  // 并格入口（成员 ≥ 2）在列表里按渠道分组，每组前面一行小标题。
+  const grouped = !favView && activeFamily !== undefined && activeFamily.members.length > 1
+  const activeTabKey = searchExpanded ? false : (favView ? '__fav__' : (activeFamily?.key ?? ''))
   useSlidingIndicator(providerSort.listRef, activeTabKey, {
     itemSelector: '.dsh003-picker-prov',
     indicatorClass: 'dsh003-picker-prov-ind',
   })
   const sourceRows = React.useMemo(() => {
     if (favView) return favoriteRows
-    if (!activeProvider) return []
-    return activeProvider.models.map(model => buildRow(activeProvider, model, false))
-  }, [favView, favoriteRows, activeProvider])
+    if (!activeFamily) return []
+    return activeFamily.members.flatMap(member => member.models.map(model => buildRow(member, model, false)))
+  }, [favView, favoriteRows, activeFamily])
   const visibleRows = React.useMemo(() => {
     const matches = (text: string): boolean => text.toLocaleLowerCase().includes(normalized)
     return normalized === '' ? sourceRows : sourceRows.filter(row =>
@@ -495,9 +502,50 @@ export function ModelPickerPanel(props: {
     : catalogStatus === 'error' ? t('loadFailed')
     : normalized !== '' ? t('emptyNoMatch')
     : favView ? t('emptyFavorites')
-    : activeProvider ? t('emptyProvider') : t('emptyCatalog')
-  // 占位文字随所在视图变化：收藏视图跨供应商，不写名字；供应商视图写显示名。
-  const placeholder = searchPlaceholder(favView, activeProvider ? displayProviderName(activeProvider) : undefined, t)
+    : activeFamily ? t('emptyProvider') : t('emptyCatalog')
+  // 搜索不只搜当前这一格（见下方 otherRows），占位文字不写入口名。
+  const placeholder = t('searchNeutral')
+  const channelNames = React.useMemo(
+    () => (grouped && activeFamily !== undefined ? channelLabels(activeFamily, t) : undefined),
+    [grouped, activeFamily, t],
+  )
+  // 搜索时，当前视图之外的匹配接在后面：模型名 / id / 提供方名任一命中即可，副行写清它在哪个入口的哪条渠道。
+  // 当前视图里没命中的行不会跑到这一段来（按 sourceRows 排除，而不是按命中的行排除）。
+  const otherRows = React.useMemo(() => {
+    if (normalized === '') return []
+    const matches = (text: string): boolean => text.toLocaleLowerCase().includes(normalized)
+    const shown = new Set(sourceRows.map(row => favoriteKeyOf(row.providerId, row.modelId)))
+    const rows: PickerRow[] = []
+    for (const family of families) {
+      const channels = family.members.length > 1 ? channelLabels(family, t) : undefined
+      for (const member of family.members) {
+        const channel = channels?.get(member.id)
+        const where = channel === undefined ? family.label : `${family.label} \u00b7 ${channel}`
+        for (const model of member.models) {
+          if (shown.has(favoriteKeyOf(member.id, model.id))) continue
+          const row = buildRow(member, model, true)
+          if (!matches(row.modelName) && !matches(row.modelId) && !matches(row.providerName)) continue
+          const split = isMagpieRoute(member.id) ? splitMagpieModelName(model.name) : null
+          rows.push({ ...row, sub: split === null ? where : `${where} \u00b7 ${split.route}` })
+        }
+      }
+    }
+    return rows
+  }, [normalized, sourceRows, families, t])
+  // 列表条目：先是当前视图的匹配（并格入口带渠道小标题），再是其它地方的匹配（一行总标题，上方一条分隔线）。
+  const listed = React.useMemo(() => [
+    ...visibleRows.map((row, index) => ({
+      row,
+      // 渠道小标题：每条渠道的第一行之前插一行；搜索后没有结果的渠道不出标题。
+      heading: row.providerId !== visibleRows[index - 1]?.providerId ? channelNames?.get(row.providerId) : undefined,
+      other: false,
+    })),
+    ...otherRows.map((row, index) => ({
+      row,
+      heading: index === 0 ? t(favView ? 'searchOtherModels' : 'searchOtherProviders') : undefined,
+      other: true,
+    })),
+  ], [visibleRows, otherRows, channelNames, favView, t])
 
   const pick = (providerId: string, modelId: string): void => {
     // 是否 no-op（点当前模型）由调用方决定，规则与理由见 ModelPickerButton.pick；这里只转发。
@@ -634,13 +682,14 @@ export function ModelPickerPanel(props: {
                     <StarIcon size={19} inline={false} filled={favView} />
                   </button>
                 </Tooltip>
-                {providerSort.sorted.map(provider => {
-                  const isActive = !favView && provider.id === activeProvider?.id
-                  const providerLabel = displayProviderName(provider)
+                {families.map(family => {
+                  // 一格以第一个成员的 id 作拖动与定位用的标识；并格时整组一起排序。
+                  const tabId = family.members[0]!.id
+                  const isActive = !favView && family.key === activeFamily?.key
                   return (
                     <Tooltip
-                      key={provider.id}
-                      label={providerLabel}
+                      key={family.key}
+                      label={family.label}
                       side="top"
                       delayMs={120}
                       portal
@@ -652,24 +701,26 @@ export function ModelPickerPanel(props: {
                         role="tab"
                         aria-selected={isActive}
                         className="dsh003-picker-prov"
-                        data-provider-id={provider.id}
-                        data-dragging={providerSort.drag?.id === provider.id ? 'true' : undefined}
-                        data-insert={providerSort.drag?.before === provider.id ? 'before' : undefined}
-                        style={providerSort.drag?.id === provider.id ? { transform: `translateX(${providerSort.drag.offset}px)` } : undefined}
+                        data-provider-id={tabId}
+                        data-dragging={providerSort.drag?.id === tabId ? 'true' : undefined}
+                        data-insert={providerSort.drag?.before === tabId ? 'before' : undefined}
+                        style={providerSort.drag?.id === tabId ? { transform: `translateX(${providerSort.drag.offset}px)` } : undefined}
                         data-active={isActive ? 'true' : 'false'}
-                        aria-label={providerLabel}
-                        onPointerDown={event => providerSort.begin(event, provider.id)}
+                        aria-label={family.label}
+                        onPointerDown={event => providerSort.begin(event, tabId)}
                         onClickCapture={providerSort.suppressClick}
-                        onKeyDown={event => providerSort.keyboardMove(event, provider.id)}
+                        onKeyDown={event => providerSort.keyboardMove(event, tabId)}
                         onContextMenu={event => event.preventDefault()}
                         onClick={() => {
+                          // 并格入口：当前模型在这一格里就停在它所在的渠道，否则停在第一个渠道。
+                          const target = family.members.find(member => member.id === current?.provider) ?? family.members[0]!
                           rememberedFavView = false
-                          rememberedProviderId = provider.id
+                          rememberedProviderId = target.id
                           setFavView(false)
-                          setActiveProviderId(provider.id)
+                          setActiveProviderId(target.id)
                         }}
                       >
-                        <ProviderLogo {...displayProviderIcon(provider)} badge={badges.get(provider.id)} />
+                        <ProviderLogo {...displayProviderIcon(family.members[0]!)} />
                       </button>
                     </Tooltip>
                   )
@@ -710,13 +761,16 @@ export function ModelPickerPanel(props: {
           className="dsh003-picker-model-scroll"
           viewportClassName="dsh003-picker-model-list"
         >
-          {visibleRows.length === 0 && <p className="dsh003-picker-empty">{emptyText}</p>}
-          {visibleRows.map(row => {
+          {listed.length === 0 && <p className="dsh003-picker-empty">{emptyText}</p>}
+          {listed.map(({ row, heading, other }) => {
             const key = favoriteKeyOf(row.providerId, row.modelId)
             const active = row.providerId === current?.provider && row.modelId === current?.model
             return (
+              <React.Fragment key={key}>
+              {heading !== undefined && (
+                <div className="dsh003-picker-group" data-section={other ? 'other' : undefined} role="presentation">{heading}</div>
+              )}
               <div
-                key={key}
                 className="dsh003-picker-model-item"
                 data-active={active ? 'true' : 'false'}
                 data-sub={row.sub !== null ? 'true' : 'false'}
@@ -763,6 +817,7 @@ export function ModelPickerPanel(props: {
                   <StarIcon size={14} inline={false} filled={favorites.has(key)} />
                 </button>
               </div>
+              </React.Fragment>
             )
           })}
         </ScrollArea>

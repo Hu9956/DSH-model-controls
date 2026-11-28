@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizeProviderOrder, mergeProviderOrder, orderedProviders, rememberProviders, moveProvider, getProviderOrder } from '../src/client/provider-order'
+import { normalizeProviderOrder, mergeProviderOrder, orderedProviders, rememberProviders, moveProvider, moveProviders, getProviderOrder } from '../src/client/provider-order'
 
 test('stored provider IDs are validated and deduplicated', () => {
   assert.deepEqual(normalizeProviderOrder(['a', 4, '', 'a', 'b', null]), ['a', 'b'])
@@ -20,4 +20,14 @@ test('moving visible suppliers preserves temporarily unavailable positions witho
   assert.deepEqual(getProviderOrder(), ['a', 'missing', 'b', 'c'])
   moveProvider(['a', 'b', 'c'], 'a', 'unknown')
   assert.deepEqual(getProviderOrder(), ['a', 'missing', 'b', 'c'])
+})
+test('a merged tab moves as a group, keeping its members in order and skipping unavailable ids', () => {
+  moveProviders(['a', 'b', 'c'], ['a', 'c'], 'b')
+  assert.deepEqual(getProviderOrder(), ['a', 'missing', 'c', 'b'], 'already in place: only the gap closes')
+  moveProviders(['a', 'b', 'c'], ['c', 'a'], null)
+  assert.deepEqual(getProviderOrder(), ['b', 'missing', 'a', 'c'], 'members keep their saved order, not the argument order')
+  moveProviders(['a', 'b', 'c'], ['a', 'c'], 'c')
+  assert.deepEqual(getProviderOrder(), ['b', 'missing', 'a', 'c'], 'dropping a group onto its own member is a no-op')
+  moveProviders(['a', 'b', 'c'], ['unknown'], 'b')
+  assert.deepEqual(getProviderOrder(), ['b', 'missing', 'a', 'c'])
 })

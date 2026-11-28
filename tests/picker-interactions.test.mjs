@@ -1212,49 +1212,99 @@ test('unknown providers still render their initial with the existing small badge
   assert.equal(icon?.textContent, '灵')
 })
 
-test('every Magpie protocol route shows the Magpie icon instead of a bare initial', async () => {
+test('Magpie protocol routes share one rail tab and the list groups them under channel headings', async () => {
   const f = fixture()
   // The gateway exposes one route per API protocol; all of them are the same gateway.
   const groups = [
     { id: 'magpie', name: 'Magpie', models: [{ id: 'a', name: 'Model a' }] },
     { id: 'magpie-responses', name: 'Magpie · Responses', models: [{ id: 'b', name: 'Model b' }] },
-    { id: 'magpie-anthropic', name: 'Magpie · Anthropic', models: [{ id: 'c', name: 'Model c' }] },
-  ]
-  f.publish({ current: { provider: 'magpie', model: 'a' }, groups })
-  await render(f.directory); await open()
-  const magpieViewBox = '0 5 44 34'
-  for (const group of groups) {
-    assert.equal(
-      query(`[data-provider-id="${group.id}"] svg`)?.getAttribute('viewBox'), magpieViewBox,
-      `${group.id} must show the Magpie icon`,
-    )
-    assert.equal(query(`[data-provider-id="${group.id}"] .dsh003-provider-initial`), null,
-      `${group.id} must not fall back to a bare initial`)
-  }
-})
-
-test('Magpie protocol routes carry R / A badges in the rail; the default route and the button stay plain', async () => {
-  const f = fixture()
-  const groups = [
-    { id: 'magpie', name: 'Magpie', models: [{ id: 'a', name: 'Model a' }] },
-    { id: 'magpie-responses', name: 'Magpie · Responses', models: [{ id: 'b', name: 'Model b' }] },
-    { id: 'magpie-anthropic', name: 'Magpie · Anthropic', models: [{ id: 'c', name: 'Model c' }] },
     { id: 'azure-openai-responses', name: 'Azure', models: [{ id: 'd', name: 'Model d' }] },
+    { id: 'magpie-anthropic', name: 'Magpie · Anthropic', models: [{ id: 'c', name: 'Model c' }] },
   ]
   f.publish({ current: { provider: 'magpie-anthropic', model: 'c' }, groups })
   await render(f.directory); await open()
-  const badgeOf = id => query(`[data-provider-id="${id}"] [data-protocol-badge]`)?.getAttribute('data-protocol-badge') ?? null
-  assert.equal(badgeOf('magpie'), null, 'the default route has no badge')
-  assert.equal(badgeOf('magpie-responses'), 'R')
-  assert.equal(badgeOf('magpie-anthropic'), 'A')
-  assert.equal(badgeOf('azure-openai-responses'), null, 'a provider whose icon is unique has no badge')
-  // 角标只是视觉区分；读屏仍读完整名字，按钮本身不带角标。
-  assert.equal(query('[data-provider-id="magpie-anthropic"]').getAttribute('aria-label'), 'Magpie · Anthropic')
-  assert.equal(query('.dsh003-picker-btn [data-protocol-badge]'), null)
-  // 每个角标的 mask id 唯一，避免多个内联 SVG 互相引用错。
-  const masks = [...document.querySelectorAll('.dsh003-provider-badge mask')].map(m => m.id)
-  assert.equal(masks.length, 2)
-  assert.equal(new Set(masks).size, masks.length)
+  // 一个入口一格：并格以第一个成员的 id 作标识，位置取第一个成员的位置。
+  assert.deepEqual(queryAll('.dsh003-picker-prov-list [data-provider-id]').map(tab => tab.dataset.providerId),
+    ['magpie', 'azure-openai-responses'])
+  const tab = query('[data-provider-id="magpie"]')
+  assert.equal(tab.dataset.active, 'true', 'the tab holding the current model is the active one')
+  assert.equal(tab.getAttribute('aria-label'), 'Magpie')
+  assert.equal(tab.querySelector('svg')?.getAttribute('viewBox'), '0 5 44 34', 'the merged tab shows the Magpie icon')
+  assert.equal(tab.querySelector('.dsh003-provider-initial'), null)
+  assert.equal(tab.querySelector('.dsh003-provider-badge'), null, 'a merged tab needs no badge')
+  // 列表按渠道分组：每条渠道第一行之前一行小标题，默认协议叫 Chat。
+  const outline = () => queryAll('.dsh003-picker-group, .dsh003-picker-model-name')
+    .map(node => node.classList.contains('dsh003-picker-group') ? `# ${node.textContent}` : node.textContent)
+  assert.deepEqual(outline(), ['# Chat', 'Model a', '# Responses', 'Model b', '# Anthropic', 'Model c'])
+  // 归并只是显示：点选仍按真实的提供方 id 提交。
+  await action(() => rows()[1].click())
+  assert.equal(f.calls.at(-1).provider, 'magpie-responses')
+  assert.equal(f.calls.at(-1).model, 'b')
+  // 搜索后没有结果的渠道不出标题。
+  await action(() => query('.dsh003-picker-search-toggle').click())
+  const search = query('.dsh003-picker-search')
+  await action(() => {
+    Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set.call(search, 'Model c')
+    search.dispatchEvent(new win.Event('input', { bubbles: true }))
+  })
+  assert.deepEqual(outline(), ['# Anthropic', 'Model c'])
+  await action(() => query('.dsh003-picker-search-close').click())
+  // 单独成格的提供方没有小标题。
+  await action(() => query('[data-provider-id="azure-openai-responses"]').click())
+  assert.deepEqual(outline(), ['Model d'])
+})
+
+test('the two DeepSeek sign-in routes share one tab, named by how each one connects', async () => {
+  const f = fixture()
+  f.publish({ current: { provider: 'deepseek-account', model: 'x' }, groups: [
+    // 宿主上报的显示名：账号登录那条是英文「DeepSeek Account」，API 密钥那条是「DeepSeek」。
+    { id: 'deepseek-account', name: 'DeepSeek Account', models: [{ id: 'x', name: 'Flash' }] },
+    { id: 'deepseek-official', name: 'DeepSeek', models: [{ id: 'x', name: 'Flash' }] },
+  ] })
+  await render(f.directory); await open()
+  const tabs = queryAll('.dsh003-picker-prov-list [data-provider-id]')
+  assert.equal(tabs.length, 1)
+  assert.equal(tabs[0].getAttribute('aria-label'), 'DeepSeek')
+  // 渠道顺序跟随用户保存的提供方顺序（其它用例可能已经排过），这里只看两条渠道各有各的标题。
+  const headings = queryAll('.dsh003-picker-group').map(node => node.textContent)
+  assert.deepEqual([...headings].sort(), ['API 密钥', '账号登录'])
+  // 同名模型各在各的渠道下，只有当前渠道（账号登录）那一行算选中。
+  assert.deepEqual(rows().map(row => row.getAttribute('aria-current') === 'true'),
+    headings.map(heading => heading === '账号登录'))
+})
+
+test('T3 bridge CLIs keep their own tabs: the T3 wordmark with a CLI badge, plain on the trigger', async () => {
+  const f = fixture()
+  const groups = [
+    { id: 't3-codex', name: 'T3 · Codex', models: [{ id: 'a', name: 'Model a' }] },
+    { id: 't3-agy', name: 'T3 · AGY', models: [{ id: 'b', name: 'Model b' }] },
+    { id: 't3-devin', name: 'T3 · Devin', models: [{ id: 'c', name: 'Model c' }] },
+    { id: 't3-future', name: 'T3 · Future', models: [{ id: 'd', name: 'Model d' }] },
+  ]
+  f.publish({ current: { provider: 't3-devin', model: 'c' }, groups })
+  await render(f.directory); await open()
+  // 桥接的是不同的 CLI，不是同一来源的几种接法：各占一格，列表不分组。
+  assert.deepEqual(queryAll('.dsh003-picker-prov-list [data-provider-id]').map(tab => tab.dataset.providerId),
+    groups.map(group => group.id))
+  assert.equal(query('.dsh003-picker-group'), null)
+  const wordmark = '15.5309 37 94.3941 56.96'
+  const badgeOf = id => query(`[data-provider-id="${id}"] [data-cli-badge]`)?.getAttribute('data-cli-badge') ?? null
+  for (const [id, cli] of [['t3-codex', 'codex'], ['t3-agy', 'antigravity'], ['t3-devin', 'devin']]) {
+    const tab = query(`[data-provider-id="${id}"]`)
+    assert.equal(tab.querySelector('.dsh003-provider-logo svg')?.getAttribute('viewBox'), wordmark, `${id} shows the T3 wordmark`)
+    assert.equal(badgeOf(id), cli)
+    assert.ok(tab.querySelector('.dsh003-provider-badge svg'), `${id} carries its CLI icon as the badge`)
+    assert.equal(tab.querySelector('.dsh003-provider-initial'), null, `${id} must not fall back to a bare initial`)
+  }
+  const badges = queryAll('.dsh003-provider-badge svg').map(svg => svg.getAttribute('viewBox'))
+  assert.equal(new Set(badges).size, 3, 'the three CLI badges are three different icons')
+  // 后缀未收录的 CLI 只画字标，不带角标。
+  assert.equal(badgeOf('t3-future'), null)
+  assert.equal(query('[data-provider-id="t3-future"] svg')?.getAttribute('viewBox'), wordmark)
+  // 读屏名仍是完整名字；触发按钮的小图标只画字标。
+  assert.equal(query('[data-provider-id="t3-agy"]').getAttribute('aria-label'), 'T3 · AGY')
+  assert.equal(query('.dsh003-picker-btn [data-cli-badge]'), null)
+  assert.equal(query('.dsh003-picker-btn .dsh003-provider-logo--sm svg')?.getAttribute('viewBox'), wordmark)
 })
 
 test('a Magpie model splits into two lines in the supplier view, other suppliers stay one line', async () => {
@@ -1547,6 +1597,27 @@ test('keyboard supplier reordering retains focus and leaves the selected model u
   assert.match(rows()[0].textContent, /Model A/)
 })
 
+test('reordering a merged tab moves all of its members together', async () => {
+  const f = fixture()
+  // 两条 deepseek 开头的路由画同一个图标，并成一格；中间夹着一个单独成格的提供方。
+  const groups = [
+    { id: 'deepseek-kb-east', name: 'DeepSeek East', models: [{ id: 'e', name: 'Model E' }] },
+    { id: 'kb-solo', name: 'Solo', models: [{ id: 's', name: 'Model S' }] },
+    { id: 'deepseek-kb-west', name: 'DeepSeek West', models: [{ id: 'w', name: 'Model W' }] },
+  ]
+  f.publish({ groups, current: { provider: 'deepseek-kb-east', model: 'e' } })
+  await render(f.directory); await open()
+  assert.deepEqual(supplierIds(), ['deepseek-kb-east', 'kb-solo'])
+  const merged = suppliers()[0]
+  await action(() => merged.focus())
+  await action(() => merged.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'ArrowRight', altKey: true, bubbles: true, cancelable: true })))
+  assert.deepEqual(supplierIds(), ['kb-solo', 'deepseek-kb-east'])
+  // 保存的仍是提供方顺序：整组挪到了另一格之后，组内先后不变。
+  assert.deepEqual(savedOrder().filter(id => groups.some(group => group.id === id)),
+    ['kb-solo', 'deepseek-kb-east', 'deepseek-kb-west'])
+  assert.equal(f.calls.length, 0)
+})
+
 test('holding a supplier at the viewport edge scrolls to destinations outside the initial view', async t => {
   const f = supplierFixture(t)
   const extra = ['D', 'E', 'F'].map(name => ({ id: `scroll-${name}`, name, models: [{ id: name, name }] }))
@@ -1562,35 +1633,86 @@ test('holding a supplier at the viewport edge scrolls to destinations outside th
   assert.equal(f.calls.length, 0)
 })
 
-test('search placeholder names the browsed provider, never dropping it', () => {
-  const { searchPlaceholder, NEUTRAL_PLACEHOLDER } = require('../src/client/search-placeholder.ts')
-  // 供应商视图：写显示名
-  assert.equal(searchPlaceholder(false, 'Magpie'), '搜索 Magpie 模型…')
-  assert.equal(searchPlaceholder(false, 'OpenCode Go'), '搜索 OpenCode Go 模型…')
-  assert.equal(searchPlaceholder(false, '灵算'), '搜索 灵算 模型…')
-  // 收藏视图跨供应商，不写名字
-  assert.equal(searchPlaceholder(true, 'Magpie'), '搜索收藏模型…')
-  // 取不到名字才退回中性，此时无供应商可写
-  assert.equal(searchPlaceholder(false, undefined), NEUTRAL_PLACEHOLDER)
-  assert.equal(searchPlaceholder(false, '   '), NEUTRAL_PLACEHOLDER)
+test('searching reaches every provider: the current tab first, then the rest with where each one lives', async () => {
+  const f = fixture()
+  f.publish({ current: { provider: 'magpie', model: 'a' }, groups: [
+    { id: 'magpie', name: 'Magpie', models: [{ id: 'a', name: 'Flash A · Trae' }, { id: 'n', name: 'Nova' }] },
+    { id: 'magpie-responses', name: 'Magpie · Responses', models: [{ id: 'b', name: 'Flash B · Codex' }] },
+    { id: 'deepseek-account', name: 'DeepSeek Account', models: [{ id: 'f', name: 'Flash D' }] },
+    { id: 'deepseek-official', name: 'DeepSeek', models: [{ id: 'f', name: 'Flash D' }] },
+    { id: 't3-devin', name: 'T3 · Devin', models: [{ id: 'c', name: 'Claude' }, { id: 's', name: 'SWE' }] },
+  ] })
+  await render(f.directory); await open()
+  await action(() => query('.dsh003-picker-search-toggle').click())
+  const search = query('.dsh003-picker-search')
+  const type = async text => {
+    await action(() => {
+      Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set.call(search, text)
+      search.dispatchEvent(new win.Event('input', { bubbles: true }))
+    })
+  }
+  const outline = () => queryAll('.dsh003-picker-group, .dsh003-picker-model-item').map(node =>
+    node.classList.contains('dsh003-picker-group')
+      ? `# ${node.textContent}${node.dataset.section === 'other' ? ' (other)' : ''}`
+      : `${node.querySelector('.dsh003-picker-model-name').textContent} | ${node.querySelector('.dsh003-picker-model-sub')?.textContent ?? ''}`)
+  // 先是当前入口（Magpie）自己的匹配，带渠道小标题；再是别处的匹配，副行写清入口与渠道。
+  await type('flash')
+  assert.deepEqual(outline().slice(0, 5), [
+    '# Chat', 'Flash A | Magpie · Trae',
+    '# Responses', 'Flash B | Magpie · Codex',
+    '# 其它供应商 (other)',
+  ])
+  // DeepSeek 两条渠道的先后跟随用户保存的提供方顺序（其它用例可能已经排过），这里只看两条都在、各带各的出处。
+  assert.deepEqual(outline().slice(5).sort(), ['Flash D | DeepSeek · API 密钥', 'Flash D | DeepSeek · 账号登录'])
+  // 当前入口里没命中的行（Nova）不会跑到「其它供应商」那一段。
+  assert.ok(!outline().some(line => line.startsWith('Nova')))
+  // 当前入口一条都没有：直接给别处的结果，不说「没有匹配」。
+  await type('claude')
+  assert.deepEqual(outline(), ['# 其它供应商 (other)', 'Claude | T3 · Devin'])
+  assert.equal(query('.dsh003-picker-empty'), null)
+  // 搜供应商的名字：列出它的全部模型。
+  await type('devin')
+  assert.deepEqual(outline(), ['# 其它供应商 (other)', 'Claude | T3 · Devin', 'SWE | T3 · Devin'])
+  // 别处的结果照常点选，按真实的提供方 id 提交。
+  await action(() => rows()[1].click())
+  assert.equal(f.calls.at(-1).provider, 't3-devin')
+  assert.equal(f.calls.at(-1).model, 's')
+  // 哪里都没有才显示「没有匹配」。
+  if (query('[role="dialog"]') === null) await open()
+  if (query('.dsh003-picker-search') === null) await action(() => query('.dsh003-picker-search-toggle').click())
+  await action(() => {
+    const input = query('.dsh003-picker-search')
+    Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set.call(input, 'zzz')
+    input.dispatchEvent(new win.Event('input', { bubbles: true }))
+  })
+  assert.equal(query('.dsh003-picker-empty').textContent, '没有匹配的模型。')
+  assert.equal(query('.dsh003-picker-group'), null)
 })
 
-test('a long provider name shortens the wording first, then clips, and keeps its head', () => {
-  const { searchPlaceholder } = require('../src/client/search-placeholder.ts')
-  // 「Qwen Token Plan CN」18 单位，仍在第一级：完整显示
-  assert.equal(searchPlaceholder(false, 'Qwen Token Plan CN'), '搜索 Qwen Token Plan CN 模型…')
-  // 去掉「模型」两字腾出空间：名字仍完整
-  assert.equal(searchPlaceholder(false, 'OpenCode Go Enterprise'), '搜索 OpenCode Go Enterprise…')
-  // 仍放不下才截断，且保留名字开头（不出现只有「搜索…」的空壳）
-  const clipped = searchPlaceholder(false, 'Qwen Token Plan CN Enterprise Edition')
-  assert.ok(clipped.startsWith('搜索 Qwen Token Plan'), clipped)
-  assert.ok(clipped.endsWith('…'), clipped)
-  assert.ok(!clipped.includes(' 模型…'), clipped)
-  // 中文名按双宽计算，不会因为字少就被误判为放得下
-  assert.ok(searchPlaceholder(false, '这是一个非常非常长的中文供应商名称示例').length < 24)
+test('searching inside favourites lists the favourites first, then every other model', async () => {
+  const f = fixture()
+  f.publish({ current: { provider: 'fav-a', model: 'x' }, groups: [
+    { id: 'fav-a', name: 'Alpha', models: [{ id: 'x', name: 'Mono X' }, { id: 'y', name: 'Mono Y' }] },
+    { id: 'fav-b', name: 'Beta', models: [{ id: 'z', name: 'Mono Z' }] },
+  ] })
+  await render(f.directory); await open()
+  await action(() => query('.dsh003-picker-row-star').click())
+  await action(() => query('.dsh003-picker-prov-fav').click())
+  await action(() => query('.dsh003-picker-search-toggle').click())
+  const search = query('.dsh003-picker-search')
+  await action(() => {
+    Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set.call(search, 'mono')
+    search.dispatchEvent(new win.Event('input', { bubbles: true }))
+  })
+  const names = queryAll('.dsh003-picker-group, .dsh003-picker-model-name').map(node => node.textContent)
+  assert.deepEqual(names, ['Mono X', '其它模型', 'Mono Y', 'Mono Z'])
+  // 还原共享状态：取消收藏、回到供应商视图。
+  await action(() => query('.dsh003-picker-search-close').click())
+  await action(() => query('.dsh003-picker-row-star').click())
+  await action(() => query('[data-provider-id="fav-a"]').click())
 })
 
-test('the search box shows the provider name and keeps a stable accessible name', async () => {
+test('the search box no longer names a provider and keeps a stable accessible name', async () => {
   const f = fixture()
   f.publish({ groups: [
     { id: 'p', name: 'Magpie', models: [{ id: 'a', name: 'Model A' }] },
@@ -1599,16 +1721,17 @@ test('the search box shows the provider name and keeps a stable accessible name'
   await render(f.directory); await open()
   assert.equal(query('[data-provider-id="p"]').getAttribute('data-tooltip-label'), 'Magpie')
   assert.equal(query('[data-provider-id="q"]').getAttribute('data-tooltip-label'), 'OpenCode Go')
-  await action(() => query('.dsh003-picker-search-toggle').click())
-  const input = query('.dsh003-picker-search')
-  assert.equal(input.getAttribute('placeholder'), '搜索 Magpie 模型…')
-  assert.equal(input.getAttribute('title'), '搜索 Magpie 模型…')
-  assert.equal(input.getAttribute('aria-label'), '搜索模型…')
-  await action(() => query('.dsh003-picker-search-close').click())
-  await action(() => query('[data-provider-id="q"]').click())
-  await action(() => query('.dsh003-picker-search-toggle').click())
-  assert.equal(query('.dsh003-picker-search').getAttribute('placeholder'), '搜索 OpenCode Go 模型…')
-  assert.equal(query('.dsh003-picker-search').getAttribute('aria-label'), '搜索模型…')
+  // 搜索跨供应商，占位文字在哪个视图都是同一句。
+  for (const tab of ['[data-provider-id="p"]', '[data-provider-id="q"]', '.dsh003-picker-prov-fav']) {
+    await action(() => query(tab).click())
+    await action(() => query('.dsh003-picker-search-toggle').click())
+    const input = query('.dsh003-picker-search')
+    assert.equal(input.getAttribute('placeholder'), '搜索模型…')
+    assert.equal(input.getAttribute('title'), '搜索模型…')
+    assert.equal(input.getAttribute('aria-label'), '搜索模型…')
+    await action(() => query('.dsh003-picker-search-close').click())
+  }
+  await action(() => query('[data-provider-id="p"]').click())
 })
 
 test('the picker renders in English with no Chinese copy left behind', async () => {
@@ -1636,7 +1759,7 @@ test('the picker renders in English with no Chinese copy left behind', async () 
   assert.equal(query('.dsh003-picker-effort-sub').textContent, 'Reasoning effort')
   await action(() => query('.dsh003-picker-search-toggle').click())
   const input = query('.dsh003-picker-search')
-  assert.equal(input.getAttribute('placeholder'), 'Search OpenCode Go models…')
+  assert.equal(input.getAttribute('placeholder'), 'Search models…')
   assert.equal(input.getAttribute('aria-label'), 'Search models…')
   assert.equal(query('.dsh003-picker-search-close').getAttribute('aria-label'), 'Close search')
   assert.ok(!/[\u4e00-\u9fa5]/.test(win.document.body.textContent), 'no Chinese copy may remain in the English picker')
