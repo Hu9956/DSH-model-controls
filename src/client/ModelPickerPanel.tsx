@@ -149,6 +149,7 @@ export function ModelPickerPanel(props: {
   })), [providers])
   const favorites = React.useSyncExternalStore(subscribeFavorites, getFavoriteSet)
   const panelRef = React.useRef<HTMLDivElement | null>(null)
+  const modelListRef = React.useRef<HTMLDivElement | null>(null)
   const searchRef = React.useRef<HTMLInputElement | null>(null)
   const searchToggleRef = React.useRef<HTMLButtonElement | null>(null)
   const activeProvRef = React.useRef<HTMLButtonElement | null>(null)
@@ -522,8 +523,59 @@ export function ModelPickerPanel(props: {
     return () => { el.removeEventListener('wheel', onWheel) }
   }, [searchExpanded, providerSort.listRef])
 
+  // 模型列表悬停由 JS 接管：滚动时高亮随原行一起走、不跟指针（浏览器滚动后补发的同坐标事件被判重忽略），指针真实移动才换行
+  React.useEffect(() => {
+    const list = modelListRef.current
+    if (!list) return undefined
+    let hovered: HTMLElement | null = null
+    let lastX: number | null = null
+    let lastY: number | null = null
+
+    const setHovered = (next: HTMLElement | null) => {
+      if (hovered === next) return
+      hovered?.removeAttribute('data-hovered')
+      hovered = next
+      hovered?.setAttribute('data-hovered', 'true')
+    }
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (e.pointerType === 'touch') return
+      if (lastX === e.clientX && lastY === e.clientY) return
+      lastX = e.clientX
+      lastY = e.clientY
+      const item = e.target instanceof Element
+        ? e.target.closest<HTMLElement>('.dsh003-picker-model-item')
+        : null
+      setHovered(item && list.contains(item) ? item : null)
+    }
+
+    const onPointerLeave = () => {
+      lastX = null
+      lastY = null
+      setHovered(null)
+    }
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        setHovered(null)
+      }
+    }
+
+    list.addEventListener('pointermove', onPointerMove, { passive: true })
+    list.addEventListener('pointerleave', onPointerLeave)
+    const doc = list.ownerDocument
+    doc?.addEventListener('keydown', onKeyDown, true)
+
+    return () => {
+      list.removeEventListener('pointermove', onPointerMove)
+      list.removeEventListener('pointerleave', onPointerLeave)
+      doc?.removeEventListener('keydown', onKeyDown, true)
+      setHovered(null)
+    }
+  }, [])
+
   return (
-    <MenuSurface ref={panelRef} tabIndex={-1} className="dsh003-picker-panel" role="dialog" aria-label={t('dialogLabel')} style={props.containerStyle} onKeyDown={onPanelKeyDown}>
+    <MenuSurface ref={panelRef} panel tabIndex={-1} className="dsh003-picker-panel" role="dialog" aria-label={t('dialogLabel')} style={props.containerStyle} onKeyDown={onPanelKeyDown}>
       <div className="dsh003-picker-inner">
       <div className="dsh003-picker-body">
         {searchExpanded ? (
@@ -652,7 +704,12 @@ export function ModelPickerPanel(props: {
             </div>
           </div>
         )}
-        <ScrollArea className="dsh003-picker-model-scroll" viewportClassName="dsh003-picker-model-list">
+        <ScrollArea
+          viewportRef={modelListRef}
+          viewportProps={{ 'data-hover-managed': '' }}
+          className="dsh003-picker-model-scroll"
+          viewportClassName="dsh003-picker-model-list"
+        >
           {visibleRows.length === 0 && <p className="dsh003-picker-empty">{emptyText}</p>}
           {visibleRows.map(row => {
             const key = favoriteKeyOf(row.providerId, row.modelId)

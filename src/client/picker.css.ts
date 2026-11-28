@@ -728,8 +728,11 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   box-sizing: border-box !important;
   transition: background 120ms ease !important;
 }
+.dsh003-picker-model-item[data-hovered="true"] {
+  background: var(--dsw-alias-interactive-bg-hover) !important;
+}
 @media (hover: hover) {
-  .dsh003-picker-model-item:hover {
+  .dsh003-picker-model-list:not([data-hover-managed]) .dsh003-picker-model-item:hover {
     background: var(--dsw-alias-interactive-bg-hover) !important;
   }
 }
@@ -838,8 +841,12 @@ div:has(> [data-slot="conversation.input.model"] .dsh003-model-controls) + div:h
   opacity: 1 !important;
   color: var(--dsw-alias-label-secondary) !important;
 }
+.dsh003-picker-model-item[data-hovered="true"] .dsh003-picker-row-star:not([data-fav="true"]):not(:hover) {
+  opacity: 1 !important;
+  color: var(--dsw-alias-label-secondary) !important;
+}
 @media (hover: hover) {
-  .dsh003-picker-model-item:hover .dsh003-picker-row-star:not([data-fav="true"]):not(:hover) {
+  .dsh003-picker-model-list:not([data-hover-managed]) .dsh003-picker-model-item:hover .dsh003-picker-row-star:not([data-fav="true"]):not(:hover) {
     opacity: 1 !important;
     color: var(--dsw-alias-label-secondary) !important;
   }
